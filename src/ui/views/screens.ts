@@ -5,6 +5,7 @@ import { peekStarter, recoveredFatigue } from '../../engine/season/season';
 import { formatStart } from '../../engine/season/schedule';
 import { playerValue } from '../../engine/development';
 import { activeOf, canOption, movesLeft, optionsLeft, RULES, waiverPlayer } from '../../engine/roster';
+import { projection } from '../../engine/draft';
 import type { App } from '../app';
 import { dateLabel, shortDate } from '../calendar';
 import type { Game } from '../state';
@@ -228,11 +229,16 @@ export function rosterView(app: App): string {
       return `<tr><th scope="row">${esc(p.name)}</th><td>${p.position}</td><td>${p.age}</td><td>${Math.round(playerValue(p))}</td><td>${esc(teamName(w.fromTeam))} · clears ${shortDate(w.until)}</td><td class="acts">${ours ? '<span class="muted">yours</span>' : btn(claimed ? 'CLAIMED' : 'CLAIM', 'claim', { kind: claimed ? 'primary' : 'secondary', data: { id: p.id } })}</td></tr>`;
     }).join('');
     const room = team.playerIds.length < 40;
+    const mineP = g.league.prospects.filter((x) => x.teamId === teamId).sort((a, b) => projection(b.player, g.league.seed).mid - projection(a.player, g.league.seed).mid);
+    const prospectsWin = win({ id: 'w-prospects', title: 'Prospects', label: `${mineP.length} · OFF THE 40 · RIGHTS TO THE YEAR ${mineP[0]?.until ?? ''} DRAFT`.replace(/ · RIGHTS TO THE YEAR  DRAFT$/, ''),
+      body: mineP.length ? tbl(head('PROSPECT').replace('OPTIONS', 'CEILING'), mineP.map((x) => { const pr = projection(x.player, g.league.seed); return `<tr>${`<th scope="row">${esc(x.player.name)}</th>`}<td>${x.player.position === 'P' ? x.player.pitcherRole : x.player.position}</td><td>${x.player.age}</td><td>${pr.now}</td><td>${pr.lo}–${pr.hi}</td><td class="acts">${btn('ADD TO 40', 'promote', { data: { id: x.player.id }, disabled: !room, title: room ? 'He joins your reserves' : 'Your 40 is full: release someone first' })}</td></tr>`; }).join(''), 'Prospects')
+        : '<p class="note muted">No prospects. Picks from the four-year draft wait here until you add them to the 40 or their rights run out.</p>' });
     const fas = [...g.league.freeAgents].sort((a, b) => playerValue(b) - playerValue(a)).slice(0, 15)
       .map((p) => `<tr><th scope="row">${esc(p.name)}</th><td>${p.position === 'P' ? (p.pitcherRole ?? 'P') : p.position}</td><td>${p.age}</td><td>${Math.round(playerValue(p))}</td><td>${optionsLeft(p)} left</td><td class="acts">${btn('SIGN', 'sign', { data: { id: p.id }, disabled: !room, title: room ? 'He joins your reserves' : 'Your 40-man roster is full: release someone first' })}</td></tr>`).join('');
     body = `<div class="row-actions">${autoBtn('roster')}<span class="note small">${left} of ${RULES.movesPerMonth} moves left this month · ${team.playerIds.length} of 40 · a call-up sends someone of the same kind down; out of options means waivers first.</span></div>
 ${win({ id: 'w-active', title: 'Active 26', label: '13 POSITION PLAYERS · 13 PITCHERS', body: tbl(head('ACTIVE'), act, 'Active roster') })}
 ${win({ id: 'w-res', title: 'Reserves', label: `${team.playerIds.length - active.size} ON THE 40, NOT ACTIVE`, body: res ? tbl(head('RESERVE'), res, 'Reserves') : '<p class="note muted">Nobody on the reserves.</p>' })}
+${prospectsWin}
 ${win({ id: 'w-waive', title: 'Waiver Wire', label: `${g.league.waivers.length} PLAYERS · WORST RECORD CLAIMS FIRST`, body: waivers ? tbl(head('PLAYER').replace('OPTIONS', 'FROM'), waivers, 'Waivers') : '<p class="note muted">Nobody on waivers.</p>' })}
 ${win({ id: 'w-fa', title: 'Free Agents', label: room ? 'SIGN TO THE RESERVES' : 'YOUR 40 IS FULL', body: tbl(head('FREE AGENT'), fas, 'Free agents') })}`;
   }

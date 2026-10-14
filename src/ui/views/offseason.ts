@@ -28,7 +28,12 @@ ${win({ id: 'w-off-ret', title: 'Retirements', label: `${r.retirements.length} P
 ${win({ id: 'w-off-sign', title: 'Signings', label: `${r.signings.length} PLAYERS`, body: list(top(r.signings).map((m) => row(m, `${m.value}`)), 'No signings.') })}
 ${win({ id: 'w-off-up', title: 'Risers', label: 'BIGGEST GAINS', body: list(r.risers.map((m) => row(m, `+${m.change}`)), '—') })}
 ${win({ id: 'w-off-down', title: 'Fallers', label: 'BIGGEST DROPS', body: list(r.fallers.map((m) => row(m, String(m.change))), '—') })}
-${win({ id: 'w-off-class', title: 'New Class', label: 'AMATEURS', body: `<p class="note">${r.newClass} sixteen-year-olds joined the amateur pool. They grow up in view, and undrafted ones can be signed at 23.</p>` })}
+${r.draft?.length ? win({ id: 'w-off-draft', title: `Year ${r.year} Draft`, label: 'YOUR PICKS · THE TOP 10', body: list([
+    ...r.draft.filter((x) => x.teamId === g.userTeam).map((x) => `<li class="mine"><span class="nm">${x.overall}. ${esc(x.name)} <span class="muted">${x.pos}, ${x.age} · ceiling ${x.lo}–${x.hi}</span></span><span class="val">R${x.round}</span></li>`),
+    ...r.draft.slice(0, 10).filter((x) => x.teamId !== g.userTeam).map((x) => `<li><span class="nm">${x.overall}. ${esc(x.name)} <span class="muted">${esc(teamName(x.teamId))} · ${esc(x.reason)}</span></span><span class="val">${x.lo}–${x.hi}</span></li>`),
+  ], '—') }) : ''}
+${r.promotions?.length ? win({ id: 'w-off-prom', title: 'Promoted', label: `${r.promotions.length} PROSPECTS JOIN A 40`, body: list(top(r.promotions).map((m) => row(m)), '—') }) : ''}
+${win({ id: 'w-off-class', title: 'New Class', label: 'AMATEURS', body: `<p class="note">${r.newClass} sixteen-year-olds joined the amateur pool. Every fourth winter the draft takes those aged 18–22; anyone undrafted at 23 can be signed by anyone.</p>` })}
 </div><p class="note muted small">${note}</p>`;
   return `<div class="frame screen-page">${banner(`YEAR ${next}`, `THE OFFSEASON · AFTER YEAR ${r.year}`)}<main class="main page" id="main" data-scroll="page-offseason">${body}</main>
 ${footer('offseason', btn(`START YEAR ${next}`, 'go', { kind: 'primary', icon: 'ball', data: { to: 'home' } }))}</div>`;

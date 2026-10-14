@@ -54,10 +54,10 @@ export function pickerView(app: App): string {
     }).join('');
     divs.push(`<section class="win" aria-labelledby="pd-${lg}-${dv}"><span class="studs" aria-hidden="true"></span><header class="win-head"><h2 class="win-title" id="pd-${lg}-${dv}">${DIVISIONS[dv]}</h2><span class="win-label">${LEAGUES[lg].toUpperCase()}</span></header><div class="win-body"><ul class="pick-list">${items}</ul></div></section>`);
   }
-  return `<div class="frame screen-picker">${banner('CHOOSE YOUR TEAM', 'GRADES ON THE 20–80 SCOUTING SCALE · 50 IS AVERAGE')}
+  return `<div class="frame screen-picker">${banner('CHOOSE YOUR TEAM', 'GRADES IF THE AI DRAFTS EVERY ROSTER · 20–80 SCALE · 50 IS AVERAGE')}
 <main class="main page" id="main" data-scroll="picker"><div class="picker-grid">${divs.join('')}</div></main>
 <footer class="footer"><nav class="nav" aria-label="Back">${btn('BACK', 'to-title', { kind: 'ghost', icon: 'left' })}</nav>
-<div class="actions">${btn('NEW TEAMS', 'reroll', { title: 'Roll a different league' })}${btn(`PLAY AS ${esc(teamName(p.team)).toUpperCase()}`, 'start-year', { kind: 'primary', icon: 'ball' })}</div></footer></div>`;
+<div class="actions">${btn('NEW TEAMS', 'reroll', { title: 'Roll a different league' })}${btn('AUTO DRAFT', 'auto-draft', { title: 'The AI drafts every roster, yours too: the grades shown are that league' })}${btn(`DRAFT ${esc(teamName(p.team)).toUpperCase()}`, 'start-year', { kind: 'primary', icon: 'ball', title: 'The founding draft: build your 40 yourself, auto the rest whenever you like' })}</div></footer></div>`;
 }
 
 // ------------------------------------------------------------------ modals

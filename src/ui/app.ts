@@ -7,7 +7,9 @@ import { regularOver } from '../engine/season/season';
 import { release, signFreeAgent, swap, toggleClaim, type MoveError } from '../engine/roster';
 import { lightingAt, type Lighting } from '../engine/season/schedule';
 import type { League } from '../engine/types';
-import { generateLeague } from '../engine/generate';
+import { autoPicks, done, onClock, pick, type DraftState } from '../engine/draft';
+import { finishFounding, foundingLeague, generateLeague } from '../engine/generate';
+import { promote } from '../engine/offseason';
 import { Music } from './audio';
 import { BASE_SPOTS, FIELD_SPOTS, drawFigures, renderBallpark, type Figure } from './ballpark';
 import { buildReplay, nextAtBat, nextInning, type Replay } from './replay';
@@ -18,7 +20,7 @@ import { SLOT, deleteLeague, getLeague, putLeague, requestPersistence } from './
 import { applyTeamColors, teamColors, teamName } from './teams';
 import { view } from './views';
 
-export type Screen = 'title' | 'picker' | 'home' | 'watch' | 'standings' | 'games' | 'leaders' | 'roster' | 'gamelog' | 'news' | 'offseason';
+export type Screen = 'title' | 'picker' | 'draft' | 'home' | 'watch' | 'standings' | 'games' | 'leaders' | 'roster' | 'gamelog' | 'news' | 'offseason';
 export type Modal = { kind: 'settings' } | { kind: 'player'; id: number } | { kind: 'password' } | { kind: 'restart' };
 export interface Settings { readable: boolean; detail: PitchDetail; music: boolean; volume: number }
 export interface Busy { label: string; done: number; total: number; note: string; stoppable: boolean }
@@ -59,6 +61,9 @@ export class App {
   logPick = -1;
   rosterTeam = 0;
   rosterTab: 'lineup' | 'staff' | 'moves' = 'lineup';
+  /** The founding draft in progress (no league to play yet). */
+  founding: { seed: number; team: number; league: League; draft: DraftState; byHand: boolean } | null = null;
+  draftFilter: 'all' | 'bats' | 'arms' = 'all';
   /** A player whose RELEASE was pressed once (the second press confirms). */
   releaseArmed = 0;
   busy: Busy | null = null;
@@ -128,11 +133,18 @@ export class App {
     return { v: SAVE_VERSION, seed: g.seed, team: g.userTeam, day: g.day };
   }
   /** The 10-character password replays Year 1 only (seed, team, day). */
-  password(): string { return this.game && this.game.year === 1 ? toPassword(this.saveData()) : ''; }
+  password(): string { return this.game && this.game.year === 1 && !this.game.draftedByHand ? toPassword(this.saveData()) : ''; }
+
+  /** The draft on screen, whichever kind. */
+  draftSession(): { league: League; draft: DraftState; userTeam: number } | null {
+    if (this.founding) return { league: this.founding.league, draft: this.founding.draft, userTeam: this.founding.team };
+    const w = this.game?.winter;
+    return w?.draft ? { league: this.game!.league, draft: w.draft, userTeam: this.game!.userTeam } : null;
+  }
 
   /** Autosave: the whole league to the database slot, after the screen has updated. Saves queue up; only the latest is written. */
   private persist() {
-    if (!this.game) return;
+    if (!this.game || this.game.winter) return; // mid-winter there's nothing to save: the year-end save replays the winter exactly
     this.dirty = true;
     if (!this.saving) this.saving = this.flush().finally(() => { this.saving = null; });
   }
@@ -547,9 +559,46 @@ export class App {
         this.render();
         return;
       }
-      case 'start-year': {
+      case 'start-year': { // draft your own team: the founding draft, picking whenever you're on the clock
+        if (!this.picker) return;
+        const { league, draft } = foundingLeague(this.picker.seed);
+        this.founding = { seed: this.picker.seed, team: this.picker.team, league, draft, byHand: false };
+        autoPicks(league, draft, this.picker.team);
+        this.screen = 'draft'; this.draftFilter = 'all';
+        this.render();
+        return;
+      }
+      case 'auto-draft': { // the AI drafts every team (the grades on the picker are this league)
         if (!this.picker) return;
         await this.newGame(this.picker.seed, this.picker.team, this.picker.league);
+        return;
+      }
+      case 'draft-filter': this.draftFilter = d.f as App['draftFilter']; this.render(); return;
+      case 'draft-pick': {
+        const v = this.draftSession();
+        if (!v || done(v.draft) || onClock(v.draft) !== v.userTeam) return;
+        pick(v.league, v.draft, Number(d.id));
+        if (this.founding) this.founding.byHand = true;
+        autoPicks(v.league, v.draft, v.userTeam);
+        this.render();
+        return;
+      }
+      case 'draft-auto': { const v = this.draftSession(); if (v) autoPicks(v.league, v.draft); this.render(); return; }
+      case 'draft-finish': {
+        if (this.founding) {
+          const f = this.founding;
+          autoPicks(f.league, f.draft);
+          finishFounding(f.league, f.draft);
+          this.founding = null;
+          await this.newGame(f.seed, f.team, f.league);
+          if (this.game) { this.game.draftedByHand = f.byHand; this.persist(); }
+        } else if (g?.winter) {
+          await this.withBusy('The rest of the winter: prospects, signings, Opening Day', 1, false, async () => { await tick(); g.finishWinter(); });
+          this.afterLoad();
+          this.screen = 'offseason';
+          this.persist();
+          this.render();
+        }
         return;
       }
       case 'continue': {
@@ -625,6 +674,15 @@ export class App {
         this.persist(); this.render();
         return;
       }
+      case 'promote': {
+        if (!g) return;
+        const pr = g.league.prospects.find((x) => x.player.id === Number(d.id) && x.teamId === g.userTeam);
+        if (!pr || g.team.playerIds.length >= 40) { this.showToast('Your 40-man roster is full'); return; }
+        promote(g.league, g.team, pr); g.players.set(pr.player.id, pr.player); g.teamOf.set(pr.player.id, g.userTeam);
+        this.showToast(`${pr.player.name} joins your reserves`);
+        this.persist(); this.render();
+        return;
+      }
       case 'claim': if (g) { toggleClaim(g.league, g.userTeam, Number(d.id)); this.persist(); this.render(); } return;
       case 'sign': {
         if (!g) return;
@@ -635,7 +693,15 @@ export class App {
       }
       case 'to-offseason': {
         if (!g || !g.over || this.busy) return;
-        await this.withBusy('The winter: aging, retirements, signings', 1, false, async () => { await tick(); g.startNextYear(); });
+        let draft: DraftState | null = null;
+        await this.withBusy('The winter: aging, retirements, the amateur pool', 1, false, async () => { await tick(); draft = g.beginWinter().draft; });
+        if (draft) { // draft night: the AI picks until you're on the clock
+          autoPicks(g.league, draft, g.userTeam);
+          this.screen = 'draft'; this.draftFilter = 'all';
+          this.render();
+          return;
+        }
+        await this.withBusy('The winter: signings', 1, false, async () => { await tick(); g.finishWinter(); });
         this.afterLoad();
         this.screen = 'offseason';
         this.persist();

@@ -8,7 +8,7 @@ import { applyEnvironment, type LeagueEnvironment } from '../engine/atbat/enviro
 import { generateLeague } from '../engine/generate';
 import { ordinal } from '../engine/game/text';
 import { Moment, type BullpenRole, type GameResult } from '../engine/game/types';
-import { nextSeason, type OffseasonReport } from '../engine/offseason';
+import { beginWinter, finishWinter, type OffseasonReport, type Winter } from '../engine/offseason';
 import { refreshPlan } from '../engine/roster';
 import { createSeason, isOver, simDay, type Season } from '../engine/season/season';
 import type { League, Player } from '../engine/types';
@@ -34,6 +34,10 @@ export class Game {
   byDay = new Map<number, number[]>();
   /** What happened over the last winter (Year 2 on). */
   offseason: OffseasonReport | null = null;
+  /** A winter in progress (a draft waiting for you). Not saved: a reload replays the winter exactly from the year-end save. */
+  winter: Winter | null = null;
+  /** You made founding-draft picks yourself (then the Year 1 password, which replays an auto-drafted league, can't help). */
+  draftedByHand = false;
 
   /** A new league, or (with `season`) one restored from a save. */
   constructor(seed: number, userTeam: number, league?: League, season?: Season) {
@@ -111,15 +115,23 @@ export class Game {
     this.byHand('staff');
   }
 
-  /** After the final: the winter (aging, retirements, signings), then Opening Day of the next year. */
-  startNextYear(): OffseasonReport {
+  /** After the final: the first half of the winter. In a draft year a draft is waiting (this.winter.draft). */
+  beginWinter(): Winter {
     if (!this.over) throw new Error('the year is not over');
-    const { season, report } = nextSeason(this.season);
+    this.winter = beginWinter(this.season);
+    return this.winter;
+  }
+  /** The rest of the winter (any picks left are the AI's), then Opening Day of the next year. */
+  finishWinter(): OffseasonReport {
+    const w = this.winter ?? this.beginWinter();
+    const { season, report } = finishWinter(w);
+    this.winter = null;
     this.bind(season);
     this.headlines = [];
     this.offseason = report;
     return report;
   }
+  startNextYear(): OffseasonReport { this.beginWinter(); return this.finishWinter(); }
 
   get day() { return this.season.day; }
   get over() { return isOver(this.season); }

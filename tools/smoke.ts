@@ -43,8 +43,8 @@ async function main() {
   await click('[data-act="pick-team"][data-id="20"]');
   ok(q('[data-act="pick-team"][data-id="20"]').getAttribute('aria-pressed') === 'true', 'picking a team selects it');
   ok(getComputedStyleVar('--line') !== '', 'team colors applied');
-  await click('[data-act="start-year"]');
-  ok(app().screen === 'home', 'year starts on the home screen');
+  await click('[data-act="auto-draft"]');
+  ok(app().screen === 'home', 'AUTO DRAFT starts the year on the home screen');
   for (const id of ['w-yours-t', 'w-div-t', 'w-tonight-t', 'w-wild-t', 'w-lead-t']) ok(doc.getElementById(id), `home window ${id}`);
   ok(doc.querySelectorAll('.w-wild .trow').length === 12, 'wild card window lists all 12 chasers');
   ok(doc.querySelector('.w-div .trow.mine'), 'your team is outlined in the division');
@@ -171,6 +171,21 @@ async function main() {
   await click('[data-act="close"]');
   await click('.nav [data-act="go"][data-to="standings"]');
   ok(doc.querySelectorAll('.past-list li').length === 1, 'standings list the past season and its champion');
+
+  // The founding draft, by hand
+  app().screen = 'title'; app().titleStage = 'menu'; app().render();
+  await click('[data-act="new-league"]');
+  await click('[data-act="pick-team"][data-id="4"]');
+  await click('[data-act="start-year"]');
+  ok(app().screen === 'draft' && text('.clock').includes('YOU ARE ON THE CLOCK'), 'the founding draft stops when you are on the clock');
+  const firstPick = (q('[data-act="draft-pick"]') as HTMLElement).dataset.id;
+  await click('[data-act="draft-pick"]');
+  ok(app().founding.league.teams.find((t: any) => t.id === 4).playerIds.includes(Number(firstPick)), 'your pick joins your 40');
+  ok(doc.querySelectorAll('.draft-recent li').length >= 2, 'the latest picks show, with reasons');
+  await click('[data-act="draft-auto"]');
+  await click('[data-act="draft-finish"]');
+  ok(app().screen === 'home' && app().game.league.teams.every((t: any) => t.playerIds.length === 40) && app().game.draftedByHand, 'AUTO THE REST, then CONTINUE: a league of full rosters');
+  ok(app().password() === '', 'no Year 1 password for a hand-drafted league');
 
   if (errors.length) { console.log('\nErrors:\n' + errors.join('\n')); process.exit(1); }
   console.log('\nSmoke test passed.');

@@ -120,6 +120,25 @@ sac flies, steals, wild pitches/passed balls, errors (glove), extra innings, wal
   staff and the roster; editing one turns it off, and your hand-set parts are repaired, not replaced, when
   players leave (also across winters). `npm run years -- 20` counts illegal rosters every 20 days: zero.
 
+## The Draft (`engine/draft.ts`)
+- **Founding draft:** every new league. A pool of 1,500 generated players (the first build's 1,200, same draws,
+  plus 25% from their own stream); 40-round snake in a random order; teams draft to 22 position players (3 C, 2 at
+  every other spot) and 18 pitchers (6+ starters), weighing what a player is now. The undrafted 300 are Year 1's
+  free agents. AUTO DRAFT on the picker skips it (the picker's grades are that league); DRAFT <TEAM> lets you
+  pick whenever you're on the clock, with AUTO THE REST any time. `generateLeague(seed)` is the auto-drafted league.
+- **Four-year draft:** the winter after Years 4, 8, 12... Ten rounds from every amateur aged 18–22. Order by the
+  cycle's combined record, worst first; a weighted lottery among the ten worst for picks 1–6 (weights 18, 16, 14,
+  12, 10, 9, 7, 6, 4, 4); the same order every round. Picks go to the team's prospect pool (off the 40) with rights
+  to the next draft; then they go back to the amateur pool (22 and under) or to free agency. Each winter AI teams
+  promote prospects 20+ who beat their weakest of a kind; you add yours from the Roster screen (AUTO ROSTER does it).
+- **The blurry view:** everyone, AI included, sees current ratings and a ceiling range whose width shrinks with
+  age; each player's read is off by a fixed amount, so the AI busts too. Scouting (4.5) replaces it.
+- **The winter splits around the draft:** history, option years, aging, retirements and the pipeline; then the
+  draft; then promotions, signings and the 26s. A reload mid-draft replays the winter exactly from the year-end save.
+- 20 simulated years with drafts: ages ~28, talent 50.3–51.4, spread ~4 from Year 1 (the founding draft makes Year 1
+  look like a settled league), zero illegal rosters. Offense drifts down ~8% over 20 years (pitchers end up a bit
+  ahead of hitters): emergent, not tuned out.
+
 ## History (`engine/history.ts`)
 Each finished season is boiled down to a summary in `league.history`: every player's regular-season and postseason
 lines as compact rows, every team's record, division place and seed, the bracket and champion, and a ratings
@@ -207,6 +226,9 @@ New-engine guards: runs vs BaseRuns check, RBI ≤ R, per-team start limits by r
 - 2026-10-14 — Roster rules (step 1.5): 26 + 14 reserves, swaps capped at 6 a month, four option years, 3-day
   waivers, weekly AI moves, the Roster screen's Lineup / Pitching / 26 & Reserves tabs with AUTO switches.
   Arbitration after two years and free agency after four (open question 2) are confirmed for 4.3.
+- 2026-10-14 — The Draft (step 1.6): founding snake draft (pick early, auto the rest), ten-round four-year draft
+  from Year 4, lottery for 1–6 among the ten worst cycle records, one blurry prospect view for everyone, the AI
+  suggests and you decide on prospects. The Year 1 password only replays auto-drafted leagues.
 
 ## Design philosophy (2026-10-03)
 Realistic baseline; the fun is in finding combinations that BREAK it (ratings + abilities + favor +

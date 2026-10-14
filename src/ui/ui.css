@@ -451,3 +451,15 @@ table.stat.roster td.acts { white-space: nowrap; text-align: right; }
 table.stat.roster td.acts .btn, table.stat.roster td.acts select { margin-left: 6px; }
 table.stat.roster td.acts .btn { min-height: 36px; padding: 4px 10px; }
 .auto-btn { min-height: 40px; }
+
+/* Draft night */
+.draft-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 900px) { .draft-layout { grid-template-columns: 1fr; } .w-clock { order: -1; } }
+.clock { margin: 0 0 4px; font: var(--d-l)/1.2 var(--f-data); color: var(--muted); }
+.clock.yours { color: var(--gold); }
+.draft-board .ceil { color: var(--gold); white-space: nowrap; }
+.draft-board th[scope="row"] { white-space: nowrap; }
+.d-sub { display: block; }
+.d-why { display: block; color: var(--muted); font-size: var(--l-xs); }
+.draft-recent li { grid-template-columns: 2.4em minmax(0, 1fr); font: var(--d-s)/1.25 var(--f-data); }
+.draft-recent .nm { white-space: normal; }
