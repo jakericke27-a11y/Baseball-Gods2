@@ -2,6 +2,8 @@
 import type { OffseasonMove } from '../../engine/offseason';
 import type { App } from '../app';
 import { teamName } from '../teams';
+import { decreeFor } from '../../engine/decree';
+import { decreeScroll, lingering } from '../decree';
 import { banner, btn, esc, footer, link, win } from './common';
 
 const row = (m: OffseasonMove, extra = '') =>
@@ -22,7 +24,9 @@ export function offseasonView(app: App): string {
   ];
   const top = <T extends OffseasonMove>(xs: T[], n = 10) => [...xs].sort((a, b) => b.value - a.value || a.id - b.id).slice(0, n);
   const note = 'Ratings are a one-number read of how good each player is now (20–80). Values shown to the nearest point.';
-  const body = `<div class="cards off-cards">
+  const d = r.decree ?? decreeFor(g.league, next);
+  const scroll = d ? decreeScroll(d, next, lingering(g.league, next)) : '';
+  const body = `${scroll}<div class="cards off-cards">
 ${win({ id: 'w-off-you', title: 'Your Winter', label: teamName(g.userTeam).toUpperCase(), body: list(yours, 'Nobody came or went. Same roster, a year older.') })}
 ${win({ id: 'w-off-ret', title: 'Retirements', label: `${r.retirements.length} PLAYERS`, body: list(top(r.retirements).map(deadRow), 'Nobody retired.') })}
 ${win({ id: 'w-off-sign', title: 'Signings', label: `${r.signings.length} PLAYERS`, body: list(top(r.signings).map((m) => row(m, `${m.value}`)), 'No signings.') })}

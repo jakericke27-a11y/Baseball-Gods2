@@ -1,3 +1,5 @@
+import type { LeagueEnvironment } from './atbat/environment';
+import type { Modifier } from './modifiers';
 import type { DraftPick } from './draft';
 import type { YearSummary } from './history';
 
@@ -96,6 +98,10 @@ export interface League {
   nextId: number;
   /** One summary per finished season (history.ts). */
   history: YearSummary[];
+  /** The league's own dials: calibrated at birth, nudged by every decree that ends (modifiers.ts). */
+  env: LeagueEnvironment;
+  /** Every modifier, past, present and coming (modifiers.ts). */
+  modifiers: Modifier[];
   /** Players on waivers (roster.ts). */
   waivers: Waiver[];
   /** Drafted players off the 40: the team holds their rights until the next draft (draft.ts). */

@@ -10,7 +10,10 @@
 import { develop, playerValue, roleFor } from './development';
 import { PIPELINE, rollAmateur } from './generate';
 import { autoPicks, cycleDraft, done as draftDone, expireRights, isDraftYear, recordDraft, type DraftPick, type DraftState } from './draft';
+import { decreeWinter, type Decree } from './decree';
 import { summarizeSeason } from './history';
+import { yearParams } from './modifiers';
+import { createRng } from './rng';
 import { refreshPlan, rosterWinter, setAllActive } from './roster';
 import type { Rng } from './rng';
 import { createSeason, type Season } from './season/season';
@@ -49,6 +52,8 @@ export interface OffseasonReport {
   promotions: OffseasonMove[];
   /** The draft, in a draft winter (every pick). */
   draft: DraftPick[];
+  /** The Gods' decree for the coming year (from Year 2). */
+  decree?: Decree;
 }
 
 const move = (p: Player, teamId: number): OffseasonMove => ({ id: p.id, name: p.name, age: p.age, teamId, value: Math.round(playerValue(p)) });
@@ -209,6 +214,8 @@ export function beginWinter(prev: Season): Winter {
   L.history.push(summarizeSeason(prev));
   rosterWinter(L);
   const report = winterBefore(L, prev.year, prev.rng);
+  // The Gods settle last year's decree into the dials and name the next year (their own dice, so the rest of the winter is untouched).
+  report.decree = decreeWinter(L, prev.year, createRng(yearSeed(L.seed, prev.year + 1) ^ 0x60d5));
   let draft: DraftState | null = null;
   if (isDraftYear(prev.year)) {
     expireRights(L, prev.year);
@@ -224,7 +231,7 @@ export function finishWinter(w: Winter): { season: Season; report: OffseasonRepo
   winterAfter(L, report, w.worst, prev.userTeam);
   setAllActive(L);
   const year = prev.year + 1;
-  const season = createSeason(L, prev.params, {
+  const season = createSeason(L, yearParams(L, year), {
     year, seed: yearSeed(L.seed, year), logs: prev.keepLogs, postseason: prev.postseason, rosterRules: prev.rosterRules, userTeam: prev.userTeam,
   });
   // Your hand-set lineup and staff carry into the new year (repaired for whoever left).

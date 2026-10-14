@@ -3,6 +3,7 @@
  *   30 teams (2 conferences × 3 divisions × 5), 40-man rosters (22 hitters + 18 pitchers),
  *   attributes = region tendency + Normal(0, stdev), clamped to 20–80.
  */
+import { BASELINE_ENVIRONMENT } from './atbat/environment';
 import { expectedGap, RATING_KEYS, rollDev } from './development';
 import { createRng, type Rng } from './rng';
 import { autoPicks, DRAFT, foundingDraft, recordDraft, type DraftState } from './draft';
@@ -145,7 +146,7 @@ export function foundingLeague(seed: number): { league: League; draft: DraftStat
     const k = i % 40;
     players.push(k < 22 ? rollPlayer(extra, nextId++, template[k]) : rollPlayer(extra, nextId++, 'P', k < 29 ? 'SP' : k < 38 ? 'RP' : 'CL'));
   }
-  const league: League = { seed, players: [], teams, amateurs: [], freeAgents: players, retired: [], nextId, history: [], waivers: [], prospects: [], drafts: [] };
+  const league: League = { seed, players: [], teams, amateurs: [], freeAgents: players, retired: [], nextId, history: [], env: { ...BASELINE_ENVIRONMENT }, modifiers: [], waivers: [], prospects: [], drafts: [] };
   seedPipeline(league);
   return { league, draft: foundingDraft(league, createRng(seed ^ 0x3c6ef372)) };
 }

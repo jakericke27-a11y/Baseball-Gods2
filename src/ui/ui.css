@@ -270,6 +270,16 @@ table.linescore.small { font-size: var(--d-m); }
 .sc-meta { font: var(--d-s)/1.1 var(--f-data); color: var(--muted); }
 .sched { display: grid; gap: 2px; padding: 8px 0; border-bottom: 4px solid var(--rule); font: var(--d-m)/1.15 var(--f-data); }
 .sched.mine { color: #FFFFFF; }
+/* ---------------------------------------------------------------- the Gods' decree */
+.decree { display: grid; grid-template-columns: 24px minmax(0, 1fr) 24px; margin: 0 0 26px; box-shadow: 8px 8px 0 var(--drop); transform-origin: center; animation: unfurl 0.9s steps(6) 1 both; }
+.decree-mid { padding: 16px 24px 14px; background: var(--parch); color: var(--ink); text-align: center; overflow: hidden; }
+.decree-k { margin: 0 0 6px; font: var(--l-xs)/1.2 var(--f-label); letter-spacing: 3px; color: var(--parch-sub); }
+.decree-title { margin: 0 0 8px; font: 400 40px/1.05 var(--f-title); color: var(--ink); text-shadow: 3px 3px 0 var(--parch-shadow); }
+.decree-fx { margin: 0; font: var(--d-s)/1.35 var(--f-data); color: var(--ink); }
+.decree-fx.muted-ink { margin-top: 4px; color: var(--parch-sub); }
+.decree-line { color: var(--gold); }
+.decree-sub { display: block; font: var(--d-s)/1.2 var(--f-data); color: var(--gold); white-space: normal; }
+@keyframes unfurl { from { clip-path: inset(0 46% 0 46%); } to { clip-path: inset(0 0 0 0); } }
 /* ---------------------------------------------------------------- races */
 .race-lead { padding: 10px 16px; font: var(--d-m)/1.25 var(--f-data); color: var(--gold); outline: none; }
 .race-mark { display: inline-block; width: 1.3em; margin-right: 6px; padding: 1px 0; text-align: center; font: var(--l-xs)/1.1 var(--f-label); background: var(--line); color: var(--text); }
@@ -425,6 +435,7 @@ input[type="file"] { font: var(--d-s)/1.2 var(--f-data); }
   .lead-grid { grid-template-columns: 1fr; }
   .music-test { grid-template-columns: 1fr 1fr; }
   /* the playoff race on a phone: team, record, the number and the odds */
+  .decree-title { font-size: 28px; }
   .race-t { --cols: minmax(0, 1fr) 28px 28px 44px 44px !important; }
   .race-t .thead > :nth-child(4), .race-t .trow > :nth-child(4), .race-t .thead > :nth-child(6), .race-t .trow > :nth-child(6), .race-t .x { display: none; }
 }

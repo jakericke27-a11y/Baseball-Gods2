@@ -134,6 +134,7 @@ export class Game {
     this.winter = null;
     this.bind(season);
     this.headlines = [];
+    if (report.decree) this.headlines.push({ day: 0, text: `The Gods decree ${report.decree.label.toUpperCase()}: ${report.decree.effect}`, teamId: 0, big: true });
     this.offseason = report;
     return report;
   }

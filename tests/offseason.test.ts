@@ -1,3 +1,4 @@
+import { yearParams } from '../src/engine/modifiers';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PARAMS } from '../src/engine/atbat/params';
@@ -41,11 +42,12 @@ describe('offseason and Year 2', () => {
     return { s, reports };
   };
   const { s, reports } = run(21, 4);
-  it('the year turns over: Year 4, a fresh schedule, standings at 0-0, the same dials', () => {
+  it('the year turns over: Year 4, a fresh schedule, standings at 0-0, the dials plus the Gods\' decree', () => {
     expect(s.year).toBe(4);
     expect(s.day).toBe(0);
     expect([...s.standings.values()].every((r) => r.W + r.L === 0)).toBe(true);
-    expect(s.params).toEqual(P);
+    expect(s.params).toEqual(yearParams(s.league, 4));
+    expect(s.params).not.toEqual(P);
     expect(s.schedule.games.length).toBe(15 * 162);
   });
   it('every team carries 22 position players and 18 pitchers, with a full lineup', () => {

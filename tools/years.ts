@@ -7,6 +7,8 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { DEFAULT_PARAMS } from '../src/engine/atbat/params';
 import { applyEnvironment, type LeagueEnvironment } from '../src/engine/atbat/environment';
 import { playerValue } from '../src/engine/development';
+import { decreeFor } from '../src/engine/decree';
+import { yearParams } from '../src/engine/modifiers';
 import { generateLeague } from '../src/engine/generate';
 import { nextSeason } from '../src/engine/offseason';
 import { activeOf, RULES } from '../src/engine/roster';
@@ -15,7 +17,7 @@ import { createSeason, simDays, simToEnd, type Season } from '../src/engine/seas
 const args = process.argv.slice(2), flags = new Set(args.filter((a) => a.startsWith('--')));
 const nums = args.filter((a) => !a.startsWith('--'));
 const N = Number(nums[0] ?? 20), SEED = Number(nums[1] ?? 2026);
-const BASELINE = 'calibration/years-baseline.json';
+const BASELINE = `calibration/years-baseline${process.argv.includes('--no-gods') ? '-no-gods' : ''}.json`;
 const rows: { RG: number; AVG: number; HR600: number; K: number; BB: number; age: number; val: number; hit: number; pit: number }[] = [];
 const P = applyEnvironment(DEFAULT_PARAMS, JSON.parse(readFileSync('calibration/baseline.json', 'utf8')) as LeagueEnvironment);
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
@@ -29,7 +31,8 @@ function line(s: Season) {
   return { AVG: H / AB, HR600: (600 * HR) / PA, K: K / PA, BB: BB / PA, RG: R / games };
 }
 
-console.log(`year  age   <25%  33+%   val   sd   top30  hit   pit  |  AVG   HR/600  K%    BB%   R/G  | retire sign  FA   champ`);
+const NO_GODS = flags.has('--no-gods');
+console.log(`year  age   <25%  33+%   val   sd   top30  hit   pit  |  AVG   HR/600  K%    BB%   R/G  | retire sign  FA   champ  decree`);
 let s = createSeason(generateLeague(SEED), P, { year: 1, seed: SEED, postseason: true, rosterRules: true });
 const t0 = performance.now();
 let illegal = 0, moves = 0;
@@ -50,7 +53,9 @@ for (let y = 1; y <= N; y++) {
   const { season, report } = y < N ? nextSeason(s) : { season: s, report: null };
   console.log(`${String(y).padStart(4)}  ${f(mean(L.map((p) => p.age)))}  ${f(100 * L.filter((p) => p.age < 25).length / L.length, 0).padStart(4)}  ${f(100 * L.filter((p) => p.age >= 33).length / L.length, 0).padStart(4)}  ` +
     `${f(mean(vals))}  ${f(sd(vals))}  ${f(mean(vals.slice(0, 30)))}  ${f(mean(L.filter((p) => p.position !== 'P').map(playerValue)))}  ${f(mean(L.filter((p) => p.position === 'P').map(playerValue)))}  |  ` +
-    `${l.AVG.toFixed(3)}  ${f(l.HR600).padStart(5)}  ${f(100 * l.K)}  ${f(100 * l.BB, 1).padStart(4)}  ${f(l.RG, 2)}  |  ${String(report?.retirements.length ?? '').padStart(4)}  ${String(report?.signings.length ?? '').padStart(4)}  ${String(s.league.freeAgents.length).padStart(4)}  ${champ}`);
+    `${l.AVG.toFixed(3)}  ${f(l.HR600).padStart(5)}  ${f(100 * l.K)}  ${f(100 * l.BB, 1).padStart(4)}  ${f(l.RG, 2)}  |  ${String(report?.retirements.length ?? '').padStart(4)}  ${String(report?.signings.length ?? '').padStart(4)}  ${String(s.league.freeAgents.length).padStart(4)}  ${String(champ).padStart(5)}  ${decreeFor(s.league, y)?.label ?? ''}`);
+  // --no-gods: no decrees, so the run shows the players' drift alone
+  if (NO_GODS) { season.league.modifiers = []; season.params = yearParams(season.league, season.year); }
   s = season;
 }
 console.log(`\n${N} years in ${f((performance.now() - t0) / 1000)} s · illegal rosters seen: ${illegal} · AI moves in the last month of each year: ${moves}`);
@@ -58,6 +63,7 @@ console.log(`\n${N} years in ${f((performance.now() - t0) / 1000)} s · illegal 
 // Regression baseline: the first five and last five years of a run, compared with tolerances.
 //   npm run years -- 20 --save    record the current league as the baseline
 //   npm run years -- 20 --check   compare against it; exits 1 if anything moved past its tolerance
+//   --no-gods                     no decrees (the players' drift alone); the baseline is recorded with the Gods on
 type Row = (typeof rows)[number];
 const span = (rs: Row[]) => Object.fromEntries((Object.keys(rs[0]) as (keyof Row)[]).map((k) => [k, mean(rs.map((r) => r[k]))])) as Row;
 const summary = { years: N, seed: SEED, illegal, early: span(rows.slice(0, 5)), late: span(rows.slice(-5)) };

@@ -152,8 +152,9 @@ async function main() {
   await click('[data-act="to-offseason"]');
   ok(app().screen === 'offseason' && doc.querySelectorAll('.off-cards .win').length === 6 && text('.banner-top').includes('YEAR 2'), 'the offseason report: six windows, Year 2 ahead');
   ok(app().game.offseason.retirements.length > 0 && app().game.offseason.signings.length > 0, 'players retired and signed over the winter');
+  ok(/THE YEAR OF THE /.test(text('.decree-title')) && app().game.offseason.decree?.from === 2, "the Gods' decree for Year 2 unrolls on the winter report");
   await click('.actions [data-act="go"][data-to="home"]');
-  ok(app().screen === 'home' && text('.banner-top').includes('YEAR 2') && app().game.day === 0 && app().game.headlines.length === 0, 'START YEAR 2: Opening Day, a clean slate of headlines');
+  ok(app().screen === 'home' && text('.banner-top').includes('YEAR 2') && app().game.day === 0 && app().game.headlines.length === 1 && app().game.headlines[0].text.startsWith('The Gods decree'), 'START YEAR 2: Opening Day, a clean slate of headlines but the decree');
   ok(app().password() === '', 'the Year 1 password is no longer offered');
   await click('[data-act="sim-week"]');
   ok(app().game.season.results.length > 0 && app().game.year === 2, 'Year 2 plays');

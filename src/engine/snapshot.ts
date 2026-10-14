@@ -6,6 +6,7 @@
  * come out as a separate list of byte arrays so a save file can store them as raw bytes.
  * Bump SNAPSHOT_VERSION when the shape changes, and add an upgrade step in UPGRADES.
  */
+import { BASELINE_ENVIRONMENT } from './atbat/environment';
 import type { AtBatParams } from './atbat/params';
 import { seedPipeline } from './generate';
 import { setAllActive } from './roster';
@@ -17,7 +18,7 @@ import type { Season, StandingRow } from './season/season';
 import type { TeamPlan } from './season/teams';
 import type { League, TeamStrategy } from './types';
 
-export const SNAPSHOT_VERSION = 6;
+export const SNAPSHOT_VERSION = 7;
 
 type Entries<V> = Array<[number, V]>;
 
@@ -120,6 +121,8 @@ const UPGRADES: Record<number, (s: SeasonSnap) => SeasonSnap> = {
   },
   // v5 → v6: the draft (prospect pools and draft records start empty; the first four-year draft comes in time).
   5: (s) => { const L = s.league as Partial<League> & League; L.prospects ??= []; L.drafts ??= []; return { ...s, v: 6 }; },
+  // v6 → v7: the league's own dials and modifiers. Every league so far played on the baseline, with no decrees.
+  6: (s) => { const L = s.league as Partial<League> & League; L.env ??= { ...BASELINE_ENVIRONMENT }; L.modifiers ??= []; return { ...s, v: 7 }; },
 };
 
 export function upgradeSnapshot(s: SeasonSnap): SeasonSnap {

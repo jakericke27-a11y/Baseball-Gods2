@@ -15,7 +15,8 @@
     "play": "tsx tools/build-web.ts && tsx tools/serve.ts",
     "ballpark": "tsx tools/ballpark.ts",
     "smoke": "tsx tools/build-web.ts && tsx tools/smoke.ts",
-    "years": "tsx tools/years.ts"
+    "years": "tsx tools/years.ts",
+    "decrees": "tsx tools/decrees.ts"
   },
   "devDependencies": {
     "@types/jsdom": "^21.1.7",

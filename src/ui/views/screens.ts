@@ -100,7 +100,8 @@ function pastSeasons(g: Game): string {
     const loser = ws ? (ws.winner === ws.high ? ws.low : ws.high) : 0;
     const mine = finish(y, g.userTeam);
     const champ = y.champion ? `${link(teamName(y.champion), 'team', { id: y.champion })}${loser ? ` <span class="muted">over ${esc(teamName(loser))}${ws ? ` ${Math.max(...ws.wins)}-${Math.min(...ws.wins)}` : ''}</span>` : ''}` : '—';
-    return `<li class="${y.champion === g.userTeam ? 'mine' : ''}"><span class="rank">${y.year}</span><span class="nm">${champ}</span><span class="val">You: ${mine.rec}, ${esc(mine.how.toLowerCase())}</span></li>`;
+    const decree = y.decree ? `<span class="decree-sub">${esc(y.decree)}</span>` : '';
+    return `<li class="${y.champion === g.userTeam ? 'mine' : ''}"><span class="rank">${y.year}</span><span class="nm">${champ}${decree}</span><span class="val">You: ${mine.rec}, ${esc(mine.how.toLowerCase())}</span></li>`;
   }).join('');
   return win({ id: 'w-past', title: 'Past Seasons', label: `${H.length} ${H.length === 1 ? 'YEAR' : 'YEARS'} · ${FINAL_NAME.toUpperCase()} CHAMPIONS`, body: `<ol class="lead-list past-list">${rows}</ol>`, cls: 'w-past wide' });
 }

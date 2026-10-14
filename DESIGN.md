@@ -148,6 +148,25 @@ About 140 KB of JSON (≈50 KB compressed) per season, two thirds of it the rati
 Ratings change only over the winter today, so one snapshot per season is exact; add in-season snapshots when
 something changes ratings mid-year.
 
+## Modifiers and the Gods' decree (`engine/modifiers.ts`, `engine/decree.ts`)
+**Modifiers** are the one system for every bounded effect stacked on the honest baseline. Each has a source, a
+target, a layer ('real' first: weather, injuries; then 'divine': decrees, the Gods, cards), a span of years, and its
+effect in the engine's own units. Today every modifier targets the league and shifts its dials; team and player targets
+(rating shifts) come with the systems that need them. The league now owns its dials (`league.env`, born from
+`calibration/baseline.json`); a year plays on `yearParams(league, year)` = the league's dials + that year's modifiers.
+When a modifier ends, its `linger` share stays in `league.env` for good. Nothing pulls the dials back.
+
+**The decree** (from the winter after Year 1): the Gods name the coming year after one stat and bless or curse it
+("The Year of the Mighty Home Run", "The Year of the Fallen Walk"). One stat a year, never the same two winters running,
+blessing or curse 50/50, chosen on the Gods' own dice (seeded from the league and year), so the rest of the winter plays
+out exactly as without them. A decree is a one-year league modifier; a quarter of it lingers, so runs of decrees leave
+eras behind. Eight stats: home run, strikeout, walk, base hit, double, triple, foul ball (longer or quicker at-bats),
+superstar (star power). Sizes move each stat 10–15% league-wide; `npm run decrees` measures every blessing and curse.
+Shown: a parchment scroll on the winter report (with what past decrees still leave behind), an Opening Day headline, a
+line on every player card, and each year's decree under Past Seasons. Decided 2026-10-14: decrees shift dials;
+archetype reactions (and maybe rating multipliers) can come later, with development (3.5). The full vote, petitions
+and vetoes stay in the backlog.
+
 ## Races and storylines (`engine/season/races.ts`, `ui/races.ts`)
 Read-only views of the season; nothing here changes it. The Races screen (footer, and the clubhouse MENU) shows:
 - **Playoff race** per league: W-L, games left, magic (M) or elimination (E) number, division and playoff odds.
@@ -258,6 +277,9 @@ New-engine guards: runs vs BaseRuns check, RBI ≤ R, per-team start limits by r
   change. Offense drifts down ~8% over 20 years (10.2 → 9.4 R/G); left as is for now, to decide at the Phase 2 tuning pass.
 - 2026-10-14 — Races and storylines (step 2.1): the Races screen and race headlines (see the section above). Odds and
   races are computed on demand and cached per day; clinch checks only run in the last 75 days so long sims stay fast.
+- 2026-10-14 — Modifiers and the Gods' decree (step 2.2): decrees shift league dials (your call), one a year from
+  Year 2, a quarter lingering for good. The 20-year baseline is now recorded with the Gods on
+  (`calibration/years-baseline.json`); `--no-gods` checks against the old Gods-free baseline, which still matches exactly.
 
 ## Design philosophy (2026-10-03)
 Realistic baseline; the fun is in finding combinations that BREAK it (ratings + abilities + favor +
@@ -374,5 +396,4 @@ If it throws, it turns itself off and the dashboard shows. Art slots, rooms and 
   streaks; batting titles near .340 and 170+ RBI seasons. Revisit with rest days; then lower the headline thresholds.
 - Strikeouts looking are 34% of Ks (MLB ~25%) — tune two-strike swings with the game loop.
 - Baseline K% is 20%; real 2019 was 23%.
-- Gods' decree mechanism: multiply ratings (×1.15 also widens the star gap) vs shift a dial.
 - Positions/fielding fit at generation (a 30-glove shortstop is currently possible).
