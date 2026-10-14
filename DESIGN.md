@@ -290,6 +290,16 @@ New-engine guards: runs vs BaseRuns check, RBI ≤ R, per-team start limits by r
   age · team; ratings of 30 and under outlined red, 70 and up green; no decree line; career folded away, with more
   columns and a CAREER total), draft names open the player card, the winter report splits into your team and the
   league, and Races hides the crown watch, chases and streak lists until someone qualifies.
+- 2026-10-14 — Screens pass (step 2.3): Races is the playoff race alone; Leaders holds five views (LEADERS, RACES,
+  STREAKS, HOT & COLD, RECORDS) with filters for the whole league or one league, hitting or pitching, and this year
+  or all time. All time counts completed seasons only; its rate leaders need a third of a regular's load per season
+  (325 PA / 100 IP a year, capped at 1,000 PA / 300 IP). Records: single-season marks (rate stats qualified by that
+  year's team games) with this year's leader shown when on pace for 90% of a counting record or within 3% of a rate
+  record after 30 games; career marks with the active player closest (75%+, counting this year). Team colors: a
+  two-tone chip beside every team name and on player rows (logos later). Games, Races and Roster fit a laptop window
+  (1100×640 and up) with long lists scrolling inside their windows; phones scroll the page. The scoreboard steps into
+  days still to come (probables for today only). A player's season line is colored by percentile among qualified
+  players (top and bottom tenth). On phones each row of tabs is one swipeable line.
 
 ## Design philosophy (2026-10-03)
 Realistic baseline; the fun is in finding combinations that BREAK it (ratings + abilities + favor +

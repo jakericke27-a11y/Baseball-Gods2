@@ -4,10 +4,10 @@ import type { App } from '../app';
 import { teamName } from '../teams';
 import { decreeFor } from '../../engine/decree';
 import { decreeScroll, lingering } from '../decree';
-import { banner, btn, esc, footer, link, win } from './common';
+import { banner, btn, esc, footer, link, win, tname } from './common';
 
 const row = (m: OffseasonMove, extra = '') =>
-  `<li><span class="nm">${link(m.name, 'player', { id: m.id })} <span class="muted">${m.age} · ${esc(teamName(m.teamId))}</span></span><span class="val">${extra || m.value}</span></li>`;
+  `<li><span class="nm">${link(m.name, 'player', { id: m.id })} <span class="muted">${m.age} · ${tname(m.teamId)}</span></span><span class="val">${extra || m.value}</span></li>`;
 const deadRow = (m: OffseasonMove) =>
   `<li><span class="nm">${esc(m.name)} <span class="muted">${m.age} · ${m.teamId ? esc(teamName(m.teamId)) : 'free agent'}</span></span><span class="val">${m.value}</span></li>`;
 const list = (items: string[], empty: string) => (items.length ? `<ol class="lead-list off-list">${items.join('')}</ol>` : `<p class="note muted">${empty}</p>`);
@@ -39,7 +39,7 @@ ${win({ id: 'w-off-ret', title: 'Retirements', label: `${r.retirements.length} P
 ${win({ id: 'w-off-sign', title: 'Signings', label: `${r.signings.length} PLAYERS`, body: list(top(r.signings).map((m) => row(m, `${m.value}`)), 'No signings.') })}
 ${win({ id: 'w-off-up', title: 'Risers', label: 'BIGGEST GAINS', body: list(r.risers.map((m) => row(m, `+${m.change}`)), '—') })}
 ${win({ id: 'w-off-down', title: 'Fallers', label: 'BIGGEST DROPS', body: list(r.fallers.map((m) => row(m, String(m.change))), '—') })}
-${r.draft?.length ? win({ id: 'w-off-draft', title: `Year ${r.year} Draft`, label: 'THE TOP 10', body: list(r.draft.slice(0, 10).map((x) => `<li class="${x.teamId === g.userTeam ? 'mine' : ''}"><span class="nm">${x.overall}. ${link(x.name, 'player', { id: x.playerId })} <span class="muted">${esc(teamName(x.teamId))} · ${esc(x.reason)}</span></span><span class="val">${x.lo}–${x.hi}</span></li>`), '—') }) : ''}
+${r.draft?.length ? win({ id: 'w-off-draft', title: `Year ${r.year} Draft`, label: 'THE TOP 10', body: list(r.draft.slice(0, 10).map((x) => `<li class="${x.teamId === g.userTeam ? 'mine' : ''}"><span class="nm">${x.overall}. ${link(x.name, 'player', { id: x.playerId })} <span class="muted">${tname(x.teamId)} · ${esc(x.reason)}</span></span><span class="val">${x.lo}–${x.hi}</span></li>`), '—') }) : ''}
 ${r.promotions?.length ? win({ id: 'w-off-prom', title: 'Promoted', label: `${r.promotions.length} PROSPECTS JOIN A 40`, body: list(top(r.promotions).map((m) => row(m)), '—') }) : ''}
 ${win({ id: 'w-off-class', title: 'New Class', label: 'AMATEURS', body: `<p class="note">${r.newClass} sixteen-year-olds joined the amateur pool. Every fourth winter the draft takes those aged 18–22; anyone undrafted at 23 can be signed by anyone.</p>` })}
 </div>`;

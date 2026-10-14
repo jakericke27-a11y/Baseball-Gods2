@@ -1,4 +1,5 @@
 /** Shared markup: windows, buttons, streak rows, the banner and the footer. Views return HTML strings. */
+import { teamName, teamPair } from '../teams';
 import { icon, type IconName } from '../sprites';
 
 export const esc = (s: string | number) =>
@@ -37,9 +38,21 @@ export function iconBtn(name: IconName, label: string, act: string, o: { on?: bo
   return `<button type="button" class="icon-btn${o.on ? ' on' : ''}" data-act="${act}"${dataAttrs(o.data)} data-key="${act}:${esc(label)}" data-tip="${esc(label)}" aria-label="${esc(label)}"${o.on ? ' aria-current="page"' : ''}>${icon(name)}</button>`;
 }
 
-/** A clickable name that opens something (a player card, a team's roster). */
+/** A clickable name that opens something (a player card, a team's roster). Team links carry their colors. */
 export const link = (text: string, act: string, data: Data, cls = '') =>
-  `<button type="button" class="link ${cls}" data-act="${act}"${dataAttrs(data)} data-key="${act}:${Object.values(data).join(':')}">${esc(text)}</button>`;
+  `${act === 'team' ? teamChip(Number(data.id)) : ''}<button type="button" class="link ${cls}" data-act="${act}"${dataAttrs(data)} data-key="${act}:${Object.values(data).join(':')}">${esc(text)}</button>`;
+
+/** A team's two colors as a small pixel chip (logos replace it once teams have them). */
+export const teamChip = (teamId: number) => {
+  if (!teamId) return '';
+  const [a, b] = teamPair(teamId);
+  return `<span class="tchip" style="--t1:${a};--t2:${b}" aria-hidden="true"></span>`;
+};
+/** A team's chip and name in the surrounding text style. */
+export const tname = (teamId: number) => `${teamChip(teamId)}${esc(teamName(teamId))}`;
+/** A team's chip and name, for player rows: small and quiet (`small`) or plain. */
+export const teamTag = (teamId: number, small = false) =>
+  `<span class="ttag${small ? ' small' : ''}">${teamChip(teamId)}${esc(teamName(teamId))}</span>`;
 
 /** A table row that can carry flames (hot) or icicles (cold), and an outline for your team. */
 export function trow(cells: string[], heat = 0, mine = false): string {

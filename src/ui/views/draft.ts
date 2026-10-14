@@ -5,7 +5,7 @@ import { REGIONS } from '../../engine/regions';
 import type { League, Player } from '../../engine/types';
 import type { App } from '../app';
 import { teamName } from '../teams';
-import { banner, btn, esc, link, r5, win } from './common';
+import { banner, btn, esc, link, r5, win, tname } from './common';
 
 export interface DraftView { league: League; draft: DraftState; userTeam: number }
 
@@ -35,9 +35,9 @@ export function draftView(app: App, v: DraftView): string {
 <p class="note small muted">NOW is how good he is today; CEILING is everyone's read of what he could become, a range that narrows as he gets older. Scouts (later) will sharpen it.</p>` });
 
   const clock = done(d) ? '<p class="note">The draft is complete.</p>'
-    : `<p class="clock${yours ? ' yours' : ''}">${yours ? 'YOU ARE ON THE CLOCK' : `${esc(teamName(onClock(d)))} on the clock`}</p><p class="note small">Round ${round} of ${d.rounds} · pick ${i + 1} of ${totalPicks(d)}</p>`;
-  const lottery = !founding && d.lottery.length ? `<h3 class="pc-h">THE LOTTERY</h3><ol class="lead-list past-list">${[...d.lottery].sort((a, b) => a[1] - b[1]).map(([id, at], k) => `<li class="${id === userTeam ? 'mine' : ''}"><span class="rank">${at}</span><span class="nm">${esc(teamName(id))}</span><span class="val">${k < 6 ? 'won a top-6 pick' : ''}</span></li>`).join('')}</ol>` : '';
-  const recent = [...d.picks].slice(-10).reverse().map((x) => `<li class="${x.teamId === userTeam ? 'mine' : ''}"><span class="rank">${x.overall}</span><span class="nm">${esc(teamName(x.teamId))}: ${link(x.name, 'player', { id: x.playerId })} <span class="muted">${x.pos}, ${x.age}</span><span class="d-why">${esc(x.reason)}</span></span></li>`).join('');
+    : `<p class="clock${yours ? ' yours' : ''}">${yours ? 'YOU ARE ON THE CLOCK' : `${tname(onClock(d))} on the clock`}</p><p class="note small">Round ${round} of ${d.rounds} · pick ${i + 1} of ${totalPicks(d)}</p>`;
+  const lottery = !founding && d.lottery.length ? `<h3 class="pc-h">THE LOTTERY</h3><ol class="lead-list past-list">${[...d.lottery].sort((a, b) => a[1] - b[1]).map(([id, at], k) => `<li class="${id === userTeam ? 'mine' : ''}"><span class="rank">${at}</span><span class="nm">${tname(id)}</span><span class="val">${k < 6 ? 'won a top-6 pick' : ''}</span></li>`).join('')}</ol>` : '';
+  const recent = [...d.picks].slice(-10).reverse().map((x) => `<li class="${x.teamId === userTeam ? 'mine' : ''}"><span class="rank">${x.overall}</span><span class="nm">${tname(x.teamId)}: ${link(x.name, 'player', { id: x.playerId })} <span class="muted">${x.pos}, ${x.age}</span><span class="d-why">${esc(x.reason)}</span></span></li>`).join('');
   const mine = d.picks.filter((x) => x.teamId === userTeam);
   let needs = '';
   if (founding) {

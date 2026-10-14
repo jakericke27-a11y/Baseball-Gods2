@@ -2,6 +2,8 @@
  * The app: which screen is up, what the player clicked, and keeping the ballpark, music and save
  * in step. Screens are HTML strings (views/); one delegated listener handles every button.
  */
+import { gameDays } from './views/screens';
+import type { LeadState } from './views/leaders';
 import type { PitchDetail } from '../engine/game/text';
 import { regularOver } from '../engine/season/season';
 import { release, signFreeAgent, swap, toggleClaim, type MoveError } from '../engine/roster';
@@ -64,6 +66,8 @@ export class App {
   /** The founding draft in progress (no league to play yet). */
   founding: { seed: number; team: number; league: League; draft: DraftState; byHand: boolean } | null = null;
   draftFilter: 'all' | 'bats' | 'arms' = 'all';
+  /** The Leaders screen: which view and filters. */
+  lead: LeadState = { view: 'leaders', scope: 'all', side: 'bat', when: 'season' };
   /** The winter report: your team or the whole league. */
   offScope: 'team' | 'league' = 'team';
   /** Hot and cold: the window in days. */
@@ -668,7 +672,7 @@ export class App {
       case 'w-box': if (this.watch) { this.stopAuto(); void this.act('go', { to: 'games', index: String(this.watch.index) }); } return;
       case 'games-day': {
         if (!g) return;
-        const days = [...g.byDay.keys()].sort((a, b) => a - b);
+        const days = gameDays(g);
         const i = days.indexOf(this.gamesDay);
         const next = days[i + Number(d.step)];
         if (next !== undefined) { this.gamesDay = next; this.gamesPick = -1; this.render(); }
@@ -676,6 +680,7 @@ export class App {
       }
       case 'games-pick': this.gamesPick = Number(d.index); this.render(); return;
       case 'log-pick': this.logPick = Number(d.index); this.render(); return;
+      case 'lead': (this.lead as unknown as Record<string, string>)[d.k!] = d.v!; this.render(); return;
       case 'off-scope': this.offScope = d.scope as App['offScope']; this.render(); return;
       case 'form-days': this.formDays = Number(d.days) as App['formDays']; this.render(); return;
       case 'news': if (g) { this.screen = 'news'; this.render(); } return;

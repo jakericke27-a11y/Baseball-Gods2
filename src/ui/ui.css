@@ -287,6 +287,35 @@ table.linescore.small { font-size: var(--d-m); }
 .sc-meta { font: var(--d-s)/1.1 var(--f-data); color: var(--muted); }
 .sched { display: grid; gap: 2px; padding: 8px 0; border-bottom: 4px solid var(--rule); font: var(--d-m)/1.15 var(--f-data); }
 .sched.mine { color: #FFFFFF; }
+/* ---------------------------------------------------------------- fixed pages: on a laptop the page fits the window and
+   long lists scroll inside their windows (Games, Races, Roster). Phones and short windows scroll the page as usual. */
+@media (min-width: 1100px) and (min-height: 640px) {
+  .main.page.page-fixed { overflow: hidden; }
+  .main.page.page-fixed > .fill { flex: 1 1 auto; min-height: 0; }
+  .page-fixed .fill { align-items: stretch; }
+  .page-fixed .fill > .win { min-height: 0; max-height: none; overflow: hidden; }
+  .page-fixed .fill > .win > .win-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+  .roster-fill { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 24px; }
+  .roster-fill:has(> .row-actions) { grid-template-rows: auto minmax(0, 1fr); }
+  .roster-fill > .row-actions { grid-column: 1 / -1; }
+  .roster-side { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 24px; padding-right: 4px; }
+  .roster-side > .win { flex-shrink: 0; }
+  .race-cols { gap: 24px; }
+  .page-fixed .race-t .trow:not(.hot):not(.cold) { padding-top: 3px; padding-bottom: 3px; }
+}
+
+/* ---------------------------------------------------------------- leaders filters and the roster bar */
+.lead-head { display: flex; flex-direction: column; gap: 10px; }
+.lead-head .tabs { margin: 0; }
+.lead-filters { display: flex; flex-wrap: wrap; gap: 10px 28px; }
+.roster-head .tabs { margin: 0; }
+.roster-fill > .row-actions { padding: 6px 12px; background: var(--panel); border: 4px solid var(--rule); }
+
+/* ---------------------------------------------------------------- team colors */
+.tchip { display: inline-block; width: 10px; height: 14px; margin-right: 6px; vertical-align: -2px; background: linear-gradient(var(--t1) 0 60%, var(--t2) 60% 100%); box-shadow: 0 0 0 2px rgba(5, 10, 28, 0.7); flex-shrink: 0; }
+.ttag { white-space: nowrap; color: var(--muted); }
+.ttag.small { font-size: var(--d-s); }
+
 /* ---------------------------------------------------------------- the dashboard reads at one size */
 .dash .trow, .dash .pen-row, .dash .prob, .dash .yt-race, .dash .yt-last, .dash .note, .dash .lead-name, .dash .lead-val, .dash .kv .v, .dash .yt-place { font-size: 16px; }
 .dash .trow .link, .dash .pen-name .link, .dash .prob .link { font-size: 16px; }
@@ -408,6 +437,12 @@ details.half[open] summary::before { content: '-'; }
 .segs.mid i.on { background: var(--frame); }
 .segs.lo i.on { background: var(--muted); }
 .pc-line { margin: 4px 0; font: var(--d-s)/1.3 var(--f-data); }
+.st-line { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.st { white-space: nowrap; color: var(--muted); }
+.st b { font-weight: 400; color: var(--text); }
+.st.pos b { color: var(--good); } .st.neg b { color: var(--bad); }
+.st.pos, .st.neg { padding: 0 4px; outline: 2px solid; outline-offset: 0; }
+.st.pos { outline-color: var(--good); } .st.neg { outline-color: var(--bad); }
 .pc-who p { margin: 0 0 2px; font: var(--d-s)/1.3 var(--f-data); color: var(--muted); }
 .pc-who .pc-main { margin-top: 6px; color: var(--text); }
 .rbar .v.v-lo, .rbar .v.v-hi { padding: 0 2px; outline: 2px solid; outline-offset: 1px; }
@@ -466,6 +501,8 @@ input[type="file"] { font: var(--d-s)/1.2 var(--f-data); }
   .music-test { grid-template-columns: 1fr 1fr; }
   /* the playoff race on a phone: team, record, the number and the odds */
   .decree-title { font-size: 24px; }
+  .lead-filters { gap: 6px; }
+  .rec-t { min-width: 560px; }
   .race-t { --cols: minmax(0, 1fr) 28px 28px 44px 44px !important; }
   .race-t .thead > :nth-child(4), .race-t .trow > :nth-child(4), .race-t .thead > :nth-child(6), .race-t .trow > :nth-child(6), .race-t .x { display: none; }
 }
@@ -553,3 +590,9 @@ table.stat.roster td.acts .btn { min-height: 36px; padding: 4px 10px; }
 .d-why { display: block; color: var(--muted); font-size: var(--l-xs); }
 .draft-recent li { grid-template-columns: 2.4em minmax(0, 1fr); font: var(--d-s)/1.25 var(--f-data); }
 .draft-recent .nm { white-space: normal; }
+
+/* phones: each row of tabs is one swipeable line (after the base .tabs rule so it wins) */
+@media (max-width: 700px) {
+  .tabs { flex-wrap: nowrap; overflow-x: auto; gap: 6px; padding-bottom: 4px; }
+  .tab { flex-shrink: 0; min-height: 40px; padding: 4px 12px; }
+}

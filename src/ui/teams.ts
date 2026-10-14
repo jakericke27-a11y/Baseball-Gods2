@@ -13,6 +13,9 @@ const PAIRS: Array<[string, string]> = [
   ['#E0A23A', '#2B3A67'], ['#4B4FA8', '#E36A3B'], ['#B5452E', '#1F4E5F'], ['#1E6091', '#E8913E'], ['#6D2C8E', '#3AA88A'],
 ];
 
+/** A team's two colors, for chips beside its name. */
+export const teamPair = (teamId: number): [string, string] => PAIRS[(Math.max(1, teamId) - 1) % PAIRS.length];
+
 type RGB = [number, number, number];
 const toRgb = (h: string): RGB => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 const toHex = (c: RGB) => '#' + c.map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');

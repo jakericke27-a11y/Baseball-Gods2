@@ -5,7 +5,7 @@ import { DEFAULT_PARAMS } from '../src/engine/atbat/params';
 import { applyEnvironment, type LeagueEnvironment } from '../src/engine/atbat/environment';
 import { develop, playerValue, RATING_KEYS } from '../src/engine/development';
 import { generateLeague, PIPELINE } from '../src/engine/generate';
-import { nextSeason , keepExpiring } from '../src/engine/offseason';
+import { nextSeason , keepExpiring, type OffseasonReport } from '../src/engine/offseason';
 import { createRng } from '../src/engine/rng';
 import { createSeason, simToEnd, type Season } from '../src/engine/season/season';
 import { restoreSeason, snapshotSeason } from '../src/engine/snapshot';
@@ -136,7 +136,7 @@ describe('your prospects before their rights run out', () => {
     L.amateurs.splice(L.amateurs.indexOf(star), 1);
     for (const k of Object.keys(star.ratings) as Array<keyof typeof star.ratings>) star.ratings[k] = 75;
     L.prospects.push({ player: star, teamId: 5, until: 4, overall: 1 });
-    const report = { year: 4, retirements: [], signings: [], releases: [], risers: [], fallers: [], newClass: 0, promotions: [], kept: [], draft: [] };
+    const report: OffseasonReport = { year: 4, retirements: [], signings: [], releases: [], risers: [], fallers: [], newClass: 0, promotions: [], kept: [], draft: [] };
     keepExpiring(L, 5, 4, report);
     return { L, t, star, report };
   };

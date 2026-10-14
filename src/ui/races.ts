@@ -10,6 +10,7 @@ import {
   type CareerKey, type RecordKey, type SeasonRecord, type StreakChange, type TeamRace,
 } from '../engine/season/races';
 import { regularOver } from '../engine/season/season';
+import { board, catOf, type Scope } from './leaders';
 import type { Game, Headline } from './state';
 import { avg, era, era2, ip, leaders, obp, rate3, slg } from './stats';
 import { DIVISIONS, LEAGUES, teamName } from './teams';
@@ -77,12 +78,10 @@ const teamLeft = (g: Game, id: number) => {
   const t = g.teamOf.get(id) ?? 0, r = g.season.standings.get(t);
   return r ? { played: r.W + r.L, left: memo(g, 'left', () => gamesLeft(g.season)).get(t) ?? 0 } : { played: 0, left: 0 };
 };
-/** Leaders' true values (the leaderboard negates ERA so higher sorts first). */
-const trueValue = (key: RecordKey, v: number) => (key === 'ERA' ? -v : v);
 
-export function leaderRaces(g: Game): LeaderRace[] {
-  return memo(g, 'leaders', () => RACE_CATS.map((c) => {
-    const top = leaders(g, c.stat, 3).map((l) => ({ ...l, value: trueValue(c.key, l.value) }));
+export function leaderRaces(g: Game, scope: Scope = 'all'): LeaderRace[] {
+  return memo(g, `leaders:${scope}`, () => RACE_CATS.map((c) => {
+    const top = board(g, catOf(c.stat), 'season', scope, 3);
     const a = top[0], b = top[1];
     const diff = a && b ? Math.abs(a.value - b.value) : Infinity;
     const gap = !b ? '' : c.key === 'AVG' ? rate3(diff) : c.key === 'ERA' ? diff.toFixed(2) : `${diff} ${c.unit}`;

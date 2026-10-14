@@ -13,10 +13,11 @@ import { BAT_CATS, LOG_KEY, PIT_CATS, diffTone, last10Tone, playTone, recordTone
 import { bracketHtml, findSeries, FINAL_NAME, seriesShort } from '../post';
 import { DIVISIONS, LEAGUES, teamName } from '../teams';
 import { bannerFor, simActions } from './home';
-import { btn, esc, footer, link, r5, thead, trow, ttable, win } from './common';
+import { btn, esc, footer, link, r5, thead, trow, ttable, win, tname } from './common';
 
-export const page = (app: App, current: string, inner: string) =>
-  `<div class="frame screen-page">${bannerFor(app.game!)}<main class="main page" id="main" data-scroll="page-${current}">${inner}</main>${footer(current, simActions(app.game!))}</div>`;
+/** A full screen. `fixed`: on a laptop or bigger it fits the window, and long lists scroll inside their windows. */
+export const page = (app: App, current: string, inner: string, fixed = false) =>
+  `<div class="frame screen-page">${bannerFor(app.game!)}<main class="main page${fixed ? ' page-fixed' : ''}" id="main" data-scroll="page-${current}">${inner}</main>${footer(current, simActions(app.game!))}</div>`;
 
 // ------------------------------------------------------------------ standings
 
@@ -58,7 +59,7 @@ ${divs}${win({ id: `w-wc-${race.league}`, title: 'Wild Card', label: LEAGUES[rac
 function boxScoreHtml(g: Game, r: GameResult, index: number): string {
   const innings = Math.max(9, r.lineScore[0].length);
   const ls = `<div class="hscroll"><table class="linescore small"><tr><th scope="col" class="ls-team"></th>${Array.from({ length: innings }, (_, i) => `<th scope="col">${i + 1}</th>`).join('')}<th class="ls-gap"></th><th scope="col">R</th><th scope="col">H</th><th scope="col">E</th></tr>
-${[0, 1].map((side) => `<tr${r.teamIds[side] === g.userTeam ? ' class="mine"' : ''}><th scope="row" class="ls-team">${esc(teamName(r.teamIds[side]))}</th>${Array.from({ length: innings }, (_, i) => `<td>${i < r.lineScore[side].length ? r.lineScore[side][i] : side === 1 && i === r.lineScore[1].length && i < r.innings ? 'x' : ''}</td>`).join('')}<td class="ls-gap"></td><td class="rhe">${r.score[side]}</td><td class="rhe">${r.hits[side]}</td><td class="rhe">${r.errors[side]}</td></tr>`).join('')}</table></div>`;
+${[0, 1].map((side) => `<tr${r.teamIds[side] === g.userTeam ? ' class="mine"' : ''}><th scope="row" class="ls-team">${tname(r.teamIds[side])}</th>${Array.from({ length: innings }, (_, i) => `<td>${i < r.lineScore[side].length ? r.lineScore[side][i] : side === 1 && i === r.lineScore[1].length && i < r.innings ? 'x' : ''}</td>`).join('')}<td class="ls-gap"></td><td class="rhe">${r.score[side]}</td><td class="rhe">${r.hits[side]}</td><td class="rhe">${r.errors[side]}</td></tr>`).join('')}</table></div>`;
   const bat = (side: 0 | 1) => {
     const notes: Record<string, string[]> = { '2B': [], '3B': [], HR: [], SB: [] };
     const rows = r.lineups[side].map((s) => {
@@ -71,7 +72,7 @@ ${[0, 1].map((side) => `<tr${r.teamIds[side] === g.userTeam ? ' class="mine"' : 
       return `<tr><th scope="row">${link(nm, 'player', { id: s.player.id })} <span class="muted">${POS_ABBR[s.pos]}</span></th><td>${b.AB}</td><td>${b.R}</td><td>${b.H}</td><td>${b.RBI}</td><td>${b.BB}</td><td>${b.K}</td></tr>`;
     }).join('');
     const note = Object.entries(notes).filter(([, v]) => v.length).map(([k, v]) => `<p class="box-note"><b>${k}:</b> ${esc(v.join(', '))}</p>`).join('');
-    return `<div class="box-side"><div class="hscroll"><table class="stat"><caption>${esc(teamName(r.teamIds[side]))}</caption><tr><th scope="col">BATTING</th><th scope="col">AB</th><th scope="col">R</th><th scope="col">H</th><th scope="col">RBI</th><th scope="col">BB</th><th scope="col">K</th></tr>${rows}</table></div>${note}</div>`;
+    return `<div class="box-side"><div class="hscroll"><table class="stat"><caption>${tname(r.teamIds[side])}</caption><tr><th scope="col">BATTING</th><th scope="col">AB</th><th scope="col">R</th><th scope="col">H</th><th scope="col">RBI</th><th scope="col">BB</th><th scope="col">K</th></tr>${rows}</table></div>${note}</div>`;
   };
   const pit = (side: 0 | 1) => {
     const rows = r.pitchersUsed[side].map((id) => {
@@ -79,7 +80,7 @@ ${[0, 1].map((side) => `<tr${r.teamIds[side] === g.userTeam ? ' class="mine"' : 
       const dec = r.decisions.win === id ? ' (W)' : r.decisions.loss === id ? ' (L)' : r.decisions.save === id ? ' (S)' : '';
       return `<tr><th scope="row">${link(g.name(id), 'player', { id })}<span class="dec">${dec}</span></th><td>${ip(p.outs)}</td><td>${p.H}</td><td>${p.R}</td><td>${p.ER}</td><td>${p.BB}</td><td>${p.K}</td><td>${p.HR}</td><td>${p.P}</td></tr>`;
     }).join('');
-    return `<div class="hscroll"><table class="stat"><caption>${esc(teamName(r.teamIds[side]))} pitching</caption><tr><th scope="col">PITCHING</th><th scope="col">IP</th><th scope="col">H</th><th scope="col">R</th><th scope="col">ER</th><th scope="col">BB</th><th scope="col">K</th><th scope="col">HR</th><th scope="col">P</th></tr>${rows}</table></div>`;
+    return `<div class="hscroll"><table class="stat"><caption>${tname(r.teamIds[side])} pitching</caption><tr><th scope="col">PITCHING</th><th scope="col">IP</th><th scope="col">H</th><th scope="col">R</th><th scope="col">ER</th><th scope="col">BB</th><th scope="col">K</th><th scope="col">HR</th><th scope="col">P</th></tr>${rows}</table></div>`;
   };
   const acts = `<div class="row-actions">${btn('GAME LOG', 'go', { icon: 'scroll', data: { to: 'gamelog', index } })}${btn('REPLAY', 'replay', { icon: 'play', data: { index }, title: 'Watch this game pitch by pitch' })}</div>`;
   return `${ls}${acts}<div class="box-grid">${bat(0)}${bat(1)}</div><div class="box-grid">${pit(0)}${pit(1)}</div>`;
@@ -112,46 +113,45 @@ function gameTag(g: Game, r: GameResult): string {
   return sr ? `${esc(seriesShort(sr))} G${r.game} · ` : r.kind === 'tiebreak' ? 'GAME 163 · ' : '';
 }
 
+/** Every day with games: the ones played, then the rest of the schedule. */
+export function gameDays(g: Game): number[] {
+  const days = new Set(g.byDay.keys());
+  for (let d = g.day; d < g.season.schedule.days; d++) if (g.season.schedule.byDay[d]?.length) days.add(d);
+  return [...days].sort((a, b) => a - b);
+}
+
 export function gamesView(app: App): string {
   const g = app.game!;
-  const days = [...g.byDay.keys()].sort((a, b) => a - b);
-  if (!days.length) {
-    const today = g.season.schedule.byDay[g.nextGameDay()] ?? [];
-    const rows = today.map((s) => `<li class="sched${s.home === g.userTeam || s.away === g.userTeam ? ' mine' : ''}"><span>${esc(teamName(s.away))} at ${esc(teamName(s.home))}</span><span class="muted">${formatStart(s.start)}</span><span class="muted small">${esc(g.name(peekStarter(g.season, s.away).id))} vs ${esc(g.name(peekStarter(g.season, s.home).id))}</span></li>`).join('');
-    return page(app, 'games', `<div class="games-layout">${win({ id: 'w-sched', title: 'Today', label: dateLabel(g.day), body: `<ul class="sched-list">${rows}</ul>`, scroll: true })}${win({ id: 'w-box', title: 'Box Score', body: '<p class="note">No games have been played yet. Sim a day, or watch your team from the home screen.</p>' })}</div>`);
+  const days = gameDays(g);
+  const lastPlayed = [...g.byDay.keys()].sort((a, b) => a - b).at(-1);
+  if (!days.includes(app.gamesDay)) app.gamesDay = lastPlayed ?? days[0] ?? 0;
+  const day = app.gamesDay, di = days.indexOf(day);
+  const nav = `<div class="day-nav">${btn('', 'games-day', { icon: 'left', data: { step: -1 }, disabled: di <= 0, title: 'Previous day', cls: 'btn-icon' })}<span class="day-label">${dateLabel(day)}${g.byDay.has(day) ? '' : ' <span class="muted small">AHEAD</span>'}</span>${btn('', 'games-day', { icon: 'right', data: { step: 1 }, disabled: di >= days.length - 1, title: 'Next day', cls: 'btn-icon' })}</div>`;
+  const idx = g.byDay.get(day);
+  if (!idx) {
+    // a day still to come: the schedule (probable starters for today only; later days set theirs that morning)
+    const games = g.season.schedule.byDay[day] ?? [];
+    const today = day === g.day;
+    const rows = games.map((s) => `<li class="sched${s.home === g.userTeam || s.away === g.userTeam ? ' mine' : ''}"><span>${tname(s.away)} at ${tname(s.home)}</span><span class="muted">${formatStart(s.start)}${s.kind === 'post' ? ` · ${esc(seriesShort(findSeries(g, s.series)!))} G${s.game}` : s.kind === 'tiebreak' ? ' · GAME 163' : ''}</span>${today ? `<span class="muted small">${esc(g.name(peekStarter(g.season, s.away).id))} vs ${esc(g.name(peekStarter(g.season, s.home).id))}</span>` : ''}</li>`).join('');
+    const mine = games.find((s) => s.home === g.userTeam || s.away === g.userTeam);
+    const side = win({ id: 'w-box', title: today ? 'Today' : 'Coming Up', label: dateLabel(day), body: `<p class="note">${mine ? `${esc(teamName(g.userTeam))} ${mine.home === g.userTeam ? 'host' : 'visit'} ${esc(teamName(mine.home === g.userTeam ? mine.away : mine.home))} at ${formatStart(mine.start)}.` : `${esc(teamName(g.userTeam))} are off.`}</p><p class="note muted small">${today ? 'Box scores appear once the day is played.' : 'Probable starters are set the morning of the game.'}</p>`, cls: 'w-boxscore' });
+    return page(app, 'games', `<div class="games-layout fill">${win({ id: 'w-scores', title: 'Schedule', label: `${games.length} GAMES`, body: `${nav}<ul class="sched-list">${rows}</ul>`, scroll: true, cls: 'w-scores' })}${side}</div>`, true);
   }
-  if (!days.includes(app.gamesDay)) app.gamesDay = days[days.length - 1];
-  const day = app.gamesDay;
-  const idx = g.byDay.get(day)!;
   if (!idx.includes(app.gamesPick)) app.gamesPick = idx.find((i) => g.season.results[i].teamIds.includes(g.userTeam)) ?? idx[0];
-  const di = days.indexOf(day);
   const cards = idx.map((i) => {
     const r = g.season.results[i];
     const wNm = r.decisions.win ? g.name(r.decisions.win) : '', lNm = r.decisions.loss ? g.name(r.decisions.loss) : '';
-    const side = (s: 0 | 1) => `<span class="sc-team${r.score[s] > r.score[1 - s] ? ' won' : ''}">${esc(teamName(r.teamIds[s]))}</span><span class="sc-runs${r.score[s] > r.score[1 - s] ? ' won' : ''}">${r.score[s]}</span>`;
+    const side = (s: 0 | 1) => `<span class="sc-team${r.score[s] > r.score[1 - s] ? ' won' : ''}">${tname(r.teamIds[s])}</span><span class="sc-runs${r.score[s] > r.score[1 - s] ? ' won' : ''}">${r.score[s]}</span>`;
     const mine = r.teamIds.includes(g.userTeam);
     return `<li><button type="button" class="score-card${i === app.gamesPick ? ' picked' : ''}${mine ? ' mine' : ''}" data-act="games-pick" data-index="${i}" data-key="games-pick:${i}" aria-pressed="${i === app.gamesPick}">
 <span class="sc-row">${side(0)}</span><span class="sc-row">${side(1)}</span><span class="sc-meta">${gameTag(g, r)}F${r.innings > 9 ? `/${r.innings}` : ''} · W ${esc(wNm)} · L ${esc(lNm)}</span></button></li>`;
   }).join('');
-  const nav = `<div class="day-nav">${btn('', 'games-day', { icon: 'left', data: { step: -1 }, disabled: di <= 0, title: 'Previous day', cls: 'btn-icon' })}<span class="day-label">${dateLabel(day)}</span>${btn('', 'games-day', { icon: 'right', data: { step: 1 }, disabled: di >= days.length - 1, title: 'Next day', cls: 'btn-icon' })}</div>`;
   const r = g.season.results[app.gamesPick];
   const box = win({ id: 'w-box', title: 'Box Score', label: `${esc(teamName(r.teamIds[0])).toUpperCase()} AT ${esc(teamName(r.teamIds[1])).toUpperCase()} · ${shortDate(r.day)}`, body: boxScoreHtml(g, r, app.gamesPick), scroll: true, cls: 'w-boxscore' });
-  return page(app, 'games', `<div class="games-layout">${win({ id: 'w-scores', title: 'Scoreboard', label: `${idx.length} GAMES`, body: `${nav}<ul class="score-list">${cards}</ul>`, scroll: true, cls: 'w-scores' })}${box}</div>`);
+  return page(app, 'games', `<div class="games-layout fill">${win({ id: 'w-scores', title: 'Scoreboard', label: `${idx.length} GAMES`, body: `${nav}<ul class="score-list">${cards}</ul>`, scroll: true, cls: 'w-scores' })}${box}</div>`, true);
 }
 
 // ------------------------------------------------------------------ leaders
-
-export function leadersView(app: App): string {
-  const g = app.game!;
-  const cat = (key: string, label: string) => {
-    const rows = leaders(g, key, 10);
-    const body = rows.length ? `<ol class="lead-list">${rows.map((l, i) => `<li class="${g.teamOf.get(l.id) === g.userTeam ? 'mine' : ''}"><span class="rank">${i + 1}</span><span class="nm">${link(g.name(l.id), 'player', { id: l.id })} <span class="muted">${esc(teamName(g.teamOf.get(l.id) ?? 0))}</span></span><span class="val">${l.shown}</span></li>`).join('')}</ol>`
-      : '<p class="note muted">No qualifiers yet.</p>';
-    return win({ id: `w-l-${key}`, title: key, label: label.toUpperCase(), body });
-  };
-  return page(app, 'leaders', `<h2 class="page-h">Batting</h2><div class="cards">${BAT_CATS.map((c) => cat(c.key, c.label)).join('')}</div>
-<h2 class="page-h">Pitching</h2><div class="cards">${PIT_CATS.map((c) => cat(c.key, c.label)).join('')}</div>`);
-}
 
 // ------------------------------------------------------------------ roster
 
@@ -227,7 +227,7 @@ export function rosterView(app: App): string {
       const p = waiverPlayer(g.league, w);
       if (!p) return '';
       const claimed = w.claims.includes(g.userTeam), ours = w.fromTeam === g.userTeam;
-      return `<tr><th scope="row">${esc(p.name)}</th><td>${p.position}</td><td>${p.age}</td><td>${Math.round(playerValue(p))}</td><td>${esc(teamName(w.fromTeam))} · clears ${shortDate(w.until)}</td><td class="acts">${ours ? '<span class="muted">yours</span>' : btn(claimed ? 'CLAIMED' : 'CLAIM', 'claim', { kind: claimed ? 'primary' : 'secondary', data: { id: p.id } })}</td></tr>`;
+      return `<tr><th scope="row">${esc(p.name)}</th><td>${p.position}</td><td>${p.age}</td><td>${Math.round(playerValue(p))}</td><td>${tname(w.fromTeam)} · clears ${shortDate(w.until)}</td><td class="acts">${ours ? '<span class="muted">yours</span>' : btn(claimed ? 'CLAIMED' : 'CLAIM', 'claim', { kind: claimed ? 'primary' : 'secondary', data: { id: p.id } })}</td></tr>`;
     }).join('');
     const room = team.playerIds.length < 40;
     const mineP = g.league.prospects.filter((x) => x.teamId === teamId).sort((a, b) => projection(b.player, g.league.seed).mid - projection(a.player, g.league.seed).mid);
@@ -238,14 +238,14 @@ export function rosterView(app: App): string {
       .map((p) => `<tr><th scope="row">${esc(p.name)}</th><td>${p.position === 'P' ? (p.pitcherRole ?? 'P') : p.position}</td><td>${p.age}</td><td>${Math.round(playerValue(p))}</td><td>${optionsLeft(p)} left</td><td class="acts">${btn('SIGN', 'sign', { data: { id: p.id }, disabled: !room, title: room ? 'He joins your reserves' : 'Your 40-man roster is full: release someone first' })}</td></tr>`).join('');
     body = `<div class="row-actions">${autoBtn('roster')}<span class="note small">${left} of ${RULES.movesPerMonth} moves left this month · ${team.playerIds.length} of 40 · a call-up sends someone of the same kind down; out of options means waivers first.</span></div>
 ${win({ id: 'w-active', title: 'Active 26', label: '13 POSITION PLAYERS · 13 PITCHERS', body: tbl(head('ACTIVE'), act, 'Active roster') })}
-${win({ id: 'w-res', title: 'Reserves', label: `${team.playerIds.length - active.size} ON THE 40, NOT ACTIVE`, body: res ? tbl(head('RESERVE'), res, 'Reserves') : '<p class="note muted">Nobody on the reserves.</p>' })}
+<div class="roster-side">${win({ id: 'w-res', title: 'Reserves', label: `${team.playerIds.length - active.size} ON THE 40, NOT ACTIVE`, body: res ? tbl(head('RESERVE'), res, 'Reserves') : '<p class="note muted">Nobody on the reserves.</p>' })}
 ${prospectsWin}
 ${win({ id: 'w-waive', title: 'Waiver Wire', label: `${g.league.waivers.length} PLAYERS · WORST RECORD CLAIMS FIRST`, body: waivers ? tbl(head('PLAYER').replace('OPTIONS', 'FROM'), waivers, 'Waivers') : '<p class="note muted">Nobody on waivers.</p>' })}
-${win({ id: 'w-fa', title: 'Free Agents', label: room ? 'SIGN TO THE RESERVES' : 'YOUR 40 IS FULL', body: tbl(head('FREE AGENT'), fas, 'Free agents') })}`;
+${win({ id: 'w-fa', title: 'Free Agents', label: room ? 'SIGN TO THE RESERVES' : 'YOUR 40 IS FULL', body: tbl(head('FREE AGENT'), fas, 'Free agents') })}</div>`;
   }
   const rs = g.season.standings.get(teamId)!;
-  return page(app, 'roster', `<div class="roster-head"><div><h2 class="page-h">${esc(teamName(teamId))}</h2><p class="page-sub">${rs.W}-${rs.L} · ${LEAGUES[team.conference]} ${DIVISIONS[team.division]} · ${team.strategy.rotationSize}-man rotation</p></div>${sel}</div>
-<div class="tabs" role="group" aria-label="Roster views">${tabs}</div>${body}`);
+  return page(app, 'roster', `<div class="roster-head"><div><h2 class="page-h">${esc(teamName(teamId))}</h2><p class="page-sub">${rs.W}-${rs.L} · ${LEAGUES[team.conference]} ${DIVISIONS[team.division]} · ${team.strategy.rotationSize}-man rotation</p></div><div class="tabs" role="group" aria-label="Roster views">${tabs}</div>${sel}</div>
+<div class="fill roster-fill">${body}</div>`, true);
 }
 
 // ------------------------------------------------------------------ game log

@@ -8,7 +8,7 @@ import { icon } from '../sprites';
 import { era, era2, rate3 } from '../stats';
 import { findSeries, seriesShort } from '../post';
 import { teamName } from '../teams';
-import { banner, btn, esc, iconBtn, link, r5, win } from './common';
+import { banner, btn, esc, iconBtn, link, r5, win, tname } from './common';
 
 function lineScore(app: App, f: Frame): string {
   const r = app.watch!.replay.result;
@@ -23,7 +23,7 @@ function lineScore(app: App, f: Frame): string {
       return `<td${cur ? ' class="cur"' : ''}>${v}</td>`;
     }).join('');
     const id = r.teamIds[side];
-    return `<tr${id === app.game!.userTeam ? ' class="mine"' : ''}><th scope="row" class="ls-team">${esc(teamName(id))}</th>${cells}<td class="ls-gap"></td><td class="rhe">${f.score[side]}</td><td class="rhe">${f.hits[side]}</td><td class="rhe">${f.errors[side]}</td></tr>`;
+    return `<tr${id === app.game!.userTeam ? ' class="mine"' : ''}><th scope="row" class="ls-team">${tname(id)}</th>${cells}<td class="ls-gap"></td><td class="rhe">${f.score[side]}</td><td class="rhe">${f.hits[side]}</td><td class="rhe">${f.errors[side]}</td></tr>`;
   };
   return `<section class="win linescore-win" aria-label="Line score"><span class="studs" aria-hidden="true"></span><div class="ls-scroll"><table class="linescore">${head}${row(0)}${row(1)}</table></div></section>`;
 }

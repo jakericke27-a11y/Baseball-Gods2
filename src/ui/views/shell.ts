@@ -1,4 +1,5 @@
 /** Title screen, team picker, the modal windows (settings, player card, password) and the sim progress overlay. */
+import { seasonLine } from '../leaders';
 import { REGIONS } from '../../engine/regions';
 import { buildTeamPlans } from '../../engine/season/teams';
 import type { League } from '../../engine/types';
@@ -99,7 +100,7 @@ function playerCard(app: App, id: number): string {
   const body = `<div class="pc-who"><p>Born in ${esc(region?.name ?? 'parts unknown')}${region ? ` <span class="muted">(${esc(region.environment.replace(/_/g, ' '))})</span>` : ''}</p>
 <p>${esc(role)}</p><p>Bats ${p.bats} · Throws ${p.throws}</p><p class="pc-main">Age ${p.age} · ${esc(where)}</p></div>
 <div class="rgrid">${isP ? arm + field + clutch : hit + field + clutch}</div>
-${g ? `<h3 class="pc-h">YEAR ${g.year}</h3><p class="pc-line">${line}</p>${postLine(g, id, isP)}${careerHtml(g, id, isP)}` : ''}`;
+${g ? `<h3 class="pc-h">YEAR ${g.year}</h3>${(isP ? q : b) ? `<p class="pc-line st-line">${seasonLine(g, id, isP)}</p><p class="pc-line muted small">Green: the league's top tenth among qualified players. Red: the bottom tenth.</p>` : `<p class="pc-line">${line}</p>`}${postLine(g, id, isP)}${careerHtml(g, id, isP)}` : ''}`;
   return modal('pc-t', esc(p.name), body);
 }
 
