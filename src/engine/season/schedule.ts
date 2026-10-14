@@ -13,6 +13,11 @@ export interface ScheduledGame {
   id: number; day: number; home: number; away: number;
   /** Local first-pitch time in minutes after midnight (e.g. 1150 = 7:10 PM). Drives day/dusk/night. */
   start: number;
+  /** Set for games added after the regular schedule: a Game 163 tiebreaker, or a postseason game. */
+  kind?: 'tiebreak' | 'post';
+  /** Postseason: the series id (postseason.ts) and the game number in it. */
+  series?: string;
+  game?: number;
 }
 
 export type Lighting = 'day' | 'dusk' | 'night';

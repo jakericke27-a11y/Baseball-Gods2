@@ -1,18 +1,23 @@
 /** Home: your team, your division, tonight's game, the wild card race, leaders and headlines over the field. */
 import { RELIEVER_MAX_FATIGUE } from '../../engine/game/game';
-import { recoveredFatigue, peekStarter } from '../../engine/season/season';
+import { seriesFor } from '../../engine/season/postseason';
+import { inPostseason, recoveredFatigue, peekStarter, regularOver } from '../../engine/season/season';
 import { formatStart } from '../../engine/season/schedule';
 import type { App } from '../app';
 import { dateLabel, weekOf, weekdayShort } from '../calendar';
 import type { Game } from '../state';
 import { era, era2, gbText, heat, last10, leaders, raceText, races, streakText } from '../stats';
+import { FINAL_NAME, bracketHtml, findSeries, postText, seriesShort } from '../post';
 import { DIVISIONS, LEAGUES, teamName } from '../teams';
 import { icon } from '../sprites';
 import { banner, btn, esc, footer, link, thead, trow, ttable, win } from './common';
 
 export function bannerFor(g: Game): string {
-  const days = g.season.schedule.days, day = g.day;
-  if (g.over) return banner('YEAR 1', 'REGULAR SEASON COMPLETE');
+  const days = g.season.regularDays, day = g.day;
+  const champ = g.season.post?.champion;
+  if (g.over) return banner('YEAR 1', champ ? `YEAR COMPLETE · ${teamName(champ).toUpperCase()} WIN THE ${FINAL_NAME.toUpperCase()}` : 'YEAR COMPLETE');
+  if (inPostseason(g.season)) return banner('YEAR 1', `POSTSEASON · ${dateLabel(day)}`);
+  if (day >= days) return banner('YEAR 1', `GAME 163 · ${dateLabel(day)}`);
   const left = days - day;
   const brk = g.season.schedule.allStarBreak;
   const tail = day >= brk && day < brk + 3 ? 'ALL-STAR BREAK' : left > 14 ? `${Math.ceil(left / 7)} WEEKS TO PLAYOFFS` : `${left} DAYS TO PLAYOFFS`;
@@ -27,14 +32,14 @@ export function simActions(g: Game): string {
     + btn('SIM DAY', 'sim-day', { kind: playing ? 'secondary' : 'primary', icon: 'hourglass' })
     + btn('WEEK', 'sim-week', { title: 'Sim 7 days' })
     + btn('MONTH', 'sim-month', { title: 'Sim 30 days' })
-    + btn('TO END', 'sim-end', { icon: 'ff', title: 'Sim the rest of the regular season' });
+    + btn('TO END', 'sim-end', { icon: 'ff', title: regularOver(g.season) ? 'Sim the rest of the postseason' : 'Sim the rest of the regular season' });
 }
 
 function ticker(g: Game): string {
   const recent = g.headlines.filter((h) => h.day >= g.day - 3).slice(-14).reverse();
   let items = recent.map((h) => `<span class="tick${h.big ? ' big' : ''}${h.teamId === g.userTeam ? ' mine' : ''}">${esc(h.text)}</span>`);
   if (!items.length) {
-    items = g.over ? ['<span class="tick">The regular season is over. The Gods are counting the votes.</span>']
+    items = g.over ? ['<span class="tick">The year is over. The Gods are counting the votes.</span>']
       : g.season.results.length === 0 ? ['<span class="tick">Opening Day. Thirty teams, 162 games each, and one set of gods watching.</span>', '<span class="tick">Sim a day, or watch your team play pitch by pitch.</span>']
       : ['<span class="tick">A quiet day around the league.</span>'];
   }
@@ -64,7 +69,7 @@ function yourTeam(g: Game): string {
   const kv = (k: string, v: string) => `<div class="kv"><div class="k">${k}</div><div class="v">${v}</div></div>`;
   const body = `<div class="yt-record"><span class="big-num">${me.W}-${me.L}</span><span class="yt-place">${placeTxt} in ${LEAGUES[t.conference]} ${DIVISIONS[t.division]}</span></div>
 <div class="kv-row">${kv('RUN DIFF', diff > 0 ? `+${diff}` : String(diff))}${kv('STREAK', streakText(me))}${kv('LAST 10', last10(me))}</div>
-<div class="yt-race">${esc(raceText(g, g.userTeam))}</div>${lastLine}`;
+<div class="yt-race">${esc(postText(g, g.userTeam) || raceText(g, g.userTeam))}</div>${lastLine}`;
   return win({ id: 'w-yours', title: 'Your Team', label: teamName(g.userTeam).toUpperCase(), body, open: 'roster', openData: { team: g.userTeam }, cls: 'w-yours' });
 }
 
@@ -86,11 +91,17 @@ function pitcherLine(g: Game, id: number): string {
 }
 
 function tonight(g: Game): string {
+  const me = g.season.standings.get(g.userTeam)!;
   if (g.over) {
-    const me = g.season.standings.get(g.userTeam)!;
-    return win({ id: 'w-tonight', title: 'Tonight', label: 'SEASON OVER', cls: 'w-tonight', body: `<p class="note">The regular season is over. ${teamName(g.userTeam)} finished ${me.W}-${me.L}.</p><p class="note muted">The postseason and Year 2 come in a later build.</p>` });
+    const champ = g.season.post?.champion ?? 0;
+    const mine = champ === g.userTeam ? `${teamName(g.userTeam)} are ${FINAL_NAME} champions.` : `${teamName(g.userTeam)} finished ${me.W}-${me.L}. ${esc(postText(g, g.userTeam))}.`;
+    return win({ id: 'w-tonight', title: 'Tonight', label: 'YEAR OVER', cls: 'w-tonight', body: `<p class="note">${champ ? `${teamName(champ)} win the ${FINAL_NAME}. ` : ''}${mine}</p><p class="note muted">Year 2 comes in a later build.</p>` });
   }
   const today = g.gameOn(g.day, g.userTeam);
+  const out = regularOver(g.season) && !g.nextGameFor(g.userTeam);
+  if (!today && out) {
+    return win({ id: 'w-tonight', title: 'Tonight', label: 'SEASON OVER', cls: 'w-tonight', body: `<p class="note">${teamName(g.userTeam)} finished ${me.W}-${me.L}. ${esc(postText(g, g.userTeam))}.</p><p class="note muted">The postseason plays on. Sim ahead to see who wins the ${FINAL_NAME}.</p>` });
+  }
   if (!today) {
     const next = g.nextGameFor(g.userTeam);
     const anyone = g.season.schedule.byDay[g.day].length > 0;
@@ -107,10 +118,16 @@ function tonight(g: Game): string {
   }).join('');
   const body = `<div class="probables"><div class="prob"><span class="who">YOU</span>${pitcherLine(g, mine.id)}</div><div class="prob"><span class="who">THEM</span>${pitcherLine(g, theirs.id)}</div></div>
 <div class="pen">${pen}</div>`;
-  return win({ id: 'w-tonight', title: 'Tonight', label: `${formatStart(today.start)} · ${home ? 'VS' : 'AT'} ${teamName(opp).toUpperCase()}`, body, cls: 'w-tonight' });
+  const sr = findSeries(g, today.series);
+  const tag = sr ? `${seriesShort(sr)} G${today.game} · ` : today.kind === 'tiebreak' ? 'GAME 163 · ' : '';
+  return win({ id: 'w-tonight', title: 'Tonight', label: `${tag}${formatStart(today.start)} · ${home ? 'VS' : 'AT'} ${teamName(opp).toUpperCase()}`, body, cls: 'w-tonight' });
 }
 
 function wildCard(g: Game): string {
+  if (g.season.post?.seeds.length) {
+    const sr = seriesFor(g.season, g.userTeam);
+    return win({ id: 'w-wild', title: 'Postseason', label: sr ? seriesShort(sr) : 'THE BRACKET', open: 'standings', body: bracketHtml(g, esc, link), scroll: true, cls: 'w-wild w-bracket' });
+  }
   const t = g.league.teams.find((x) => x.id === g.userTeam)!;
   const race = races(g)[t.conference];
   const cols = 'minmax(0, 1fr) 36px 36px 50px';

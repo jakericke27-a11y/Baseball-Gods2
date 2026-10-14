@@ -7,6 +7,7 @@ import type { App } from '../app';
 import { dateLabel, shortDate } from '../calendar';
 import type { Game } from '../state';
 import { BAT_CATS, PIT_CATS, avg, era, era2, gbText, heat, ip, last10, leaders, obp, pct, races, rate3, slg, streakText, whip } from '../stats';
+import { bracketHtml, findSeries, FINAL_NAME, seriesShort } from '../post';
 import { DIVISIONS, LEAGUES, teamName } from '../teams';
 import { bannerFor, simActions } from './home';
 import { btn, esc, footer, link, r5, thead, trow, ttable, win } from './common';
@@ -41,10 +42,12 @@ export function standingsView(app: App): string {
     const picture = [...seeds.map((r, i) => `<li><span class="seed">${i + 1}</span>${link(teamName(r.teamId), 'team', { id: r.teamId })} <span class="muted">${r.W}-${r.L} · ${DIVISIONS[race.divisions.find((d) => d.rows[0] === r)!.division]}</span></li>`),
       ...race.wildCard.slice(0, 2).map((w, i) => `<li><span class="seed">${i + 4}</span>${link(teamName(w.row.teamId), 'team', { id: w.row.teamId })} <span class="muted">${w.row.W}-${w.row.L} · Wild card</span></li>`)].join('');
     return `<div class="league-col"><h2 class="page-h">${LEAGUES[race.league]}</h2>
-${win({ id: `w-pic-${race.league}`, title: 'Playoff Picture', label: 'IF IT ENDED TODAY', body: `<ol class="seeds">${picture}</ol>` })}
+${g.season.post?.seeds.length ? '' : win({ id: `w-pic-${race.league}`, title: 'Playoff Picture', label: 'IF IT ENDED TODAY', body: `<ol class="seeds">${picture}</ol>` })}
 ${divs}${win({ id: `w-wc-${race.league}`, title: 'Wild Card', label: LEAGUES[race.league].toUpperCase(), body: ttable(cols2, 'Wild card race', thead(['TEAM', 'W', 'L', 'PCT', 'GB', 'L10', 'STK']) + wc) })}</div>`;
   }).join('');
-  return page(app, 'standings', `<div class="two-col">${cols3}</div>`);
+  const P = g.season.post;
+  const bracket = P?.seeds.length ? win({ id: 'w-bracket', title: 'Postseason', label: P.champion ? `${FINAL_NAME.toUpperCase()} CHAMPIONS: ${teamName(P.champion).toUpperCase()}` : 'THE BRACKET', body: bracketHtml(g, esc, link), cls: 'w-bracket wide' }) : '';
+  return page(app, 'standings', `${bracket}<div class="two-col">${cols3}</div>`);
 }
 
 // ------------------------------------------------------------------ games and box scores
@@ -79,6 +82,12 @@ ${[0, 1].map((side) => `<tr${r.teamIds[side] === g.userTeam ? ' class="mine"' : 
   return `${ls}${acts}<div class="box-grid">${bat(0)}${bat(1)}</div><div class="box-grid">${pit(0)}${pit(1)}</div>`;
 }
 
+/** "AL DS G3 · " for postseason games, "GAME 163 · " for tiebreakers. */
+function gameTag(g: Game, r: GameResult): string {
+  const sr = findSeries(g, r.series);
+  return sr ? `${esc(seriesShort(sr))} G${r.game} · ` : r.kind === 'tiebreak' ? 'GAME 163 · ' : '';
+}
+
 export function gamesView(app: App): string {
   const g = app.game!;
   const days = [...g.byDay.keys()].sort((a, b) => a - b);
@@ -98,7 +107,7 @@ export function gamesView(app: App): string {
     const side = (s: 0 | 1) => `<span class="sc-team${r.score[s] > r.score[1 - s] ? ' won' : ''}">${esc(teamName(r.teamIds[s]))}</span><span class="sc-runs${r.score[s] > r.score[1 - s] ? ' won' : ''}">${r.score[s]}</span>`;
     const mine = r.teamIds.includes(g.userTeam);
     return `<li><button type="button" class="score-card${i === app.gamesPick ? ' picked' : ''}${mine ? ' mine' : ''}" data-act="games-pick" data-index="${i}" data-key="games-pick:${i}" aria-pressed="${i === app.gamesPick}">
-<span class="sc-row">${side(0)}</span><span class="sc-row">${side(1)}</span><span class="sc-meta">F${r.innings > 9 ? `/${r.innings}` : ''} · W ${esc(wNm)} · L ${esc(lNm)}</span></button></li>`;
+<span class="sc-row">${side(0)}</span><span class="sc-row">${side(1)}</span><span class="sc-meta">${gameTag(g, r)}F${r.innings > 9 ? `/${r.innings}` : ''} · W ${esc(wNm)} · L ${esc(lNm)}</span></button></li>`;
   }).join('');
   const nav = `<div class="day-nav">${btn('', 'games-day', { icon: 'left', data: { step: -1 }, disabled: di <= 0, title: 'Previous day', cls: 'btn-icon' })}<span class="day-label">${dateLabel(day)}</span>${btn('', 'games-day', { icon: 'right', data: { step: 1 }, disabled: di >= days.length - 1, title: 'Next day', cls: 'btn-icon' })}</div>`;
   const r = g.season.results[app.gamesPick];

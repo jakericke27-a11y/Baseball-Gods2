@@ -10,6 +10,7 @@ import { ordinal } from '../engine/game/text';
 import { Moment, type GameResult } from '../engine/game/types';
 import { createSeason, isOver, simDay, type Season } from '../engine/season/season';
 import type { League, Player } from '../engine/types';
+import { postHeadlines } from './post';
 import { teamName } from './teams';
 
 export const PARAMS = applyEnvironment(DEFAULT_PARAMS, baseline as LeagueEnvironment);
@@ -33,7 +34,7 @@ export class Game {
   constructor(seed: number, userTeam: number, league?: League, season?: Season) {
     this.seed = seed;
     this.userTeam = userTeam;
-    this.season = season ?? createSeason(league ?? generateLeague(seed), PARAMS, { year: 1, seed, logs: true });
+    this.season = season ?? createSeason(league ?? generateLeague(seed), PARAMS, { year: 1, seed, logs: true, postseason: true });
     this.league = this.season.league;
     this.players = this.season.players;
     for (const t of this.league.teams) for (const id of t.playerIds) this.teamOf.set(id, t.id);
@@ -51,6 +52,7 @@ export class Game {
     const start = this.season.results.length - results.length;
     if (results.length) this.byDay.set(day, results.map((_, i) => start + i));
     this.addHeadlines(day, results);
+    this.headlines.push(...postHeadlines(this, day, results));
     return results;
   }
 
@@ -107,8 +109,8 @@ export class Game {
           case Moment.ShutoutCG: add(`${P(m.playerId)} throws a complete-game shutout`, team); break;
         }
       }
-      // Home run milestones: 20, 30, 40...
-      for (const [id, line] of g.batting) {
+      // Home run milestones: 20, 30, 40... (regular season)
+      if (g.kind !== 'post') for (const [id, line] of g.batting) {
         if (!line.HR) continue;
         const after = this.season.batting.get(id)?.HR ?? 0, before = after - line.HR;
         const mark = Math.floor(after / 10) * 10;
@@ -116,7 +118,7 @@ export class Game {
       }
     }
     // Streaks reaching 7, 10, 13...
-    const played = new Set(results.flatMap((g) => g.teamIds));
+    const played = new Set(results.filter((g) => g.kind !== 'post').flatMap((g) => g.teamIds));
     for (const id of played) {
       const st = this.season.standings.get(id)!.streak, n = Math.abs(st);
       if (n >= 7 && (n - 7) % 3 === 0) add(st > 0 ? `${T(id)} have won ${n} straight` : `${T(id)} have lost ${n} straight`, id, n >= 10);

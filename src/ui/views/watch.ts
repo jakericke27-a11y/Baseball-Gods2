@@ -6,6 +6,7 @@ import type { App } from '../app';
 import { LOC_WORD, PITCH_WORD, type Frame } from '../replay';
 import { icon } from '../sprites';
 import { era, era2, rate3 } from '../stats';
+import { findSeries, seriesShort } from '../post';
 import { teamName } from '../teams';
 import { banner, btn, esc, iconBtn, link, r5, win } from './common';
 
@@ -34,9 +35,10 @@ function chips(c: Record<string, number>): string {
 function matchup(app: App, f: Frame): string {
   const g = app.game!, r = app.watch!.replay.result;
   const b = g.players.get(f.batter)!, p = g.players.get(f.pitcher)!;
-  const sb = g.season.batting.get(b.id), gb = r.batting.get(b.id);
+  const post = r.kind === 'post';
+  const sb = (post ? g.season.postBatting : g.season.batting).get(b.id), gb = r.batting.get(b.id);
   const ab = (sb?.AB ?? 0) - (gb?.AB ?? 0), h = (sb?.H ?? 0) - (gb?.H ?? 0), hr = (sb?.HR ?? 0) - (gb?.HR ?? 0);
-  const sp = g.season.pitching.get(p.id), gp = r.pitching.get(p.id);
+  const sp = (post ? g.season.postPitching : g.season.pitching).get(p.id), gp = r.pitching.get(p.id);
   const before = sp ? { ...sp, ER: sp.ER - (gp?.ER ?? 0), outs: sp.outs - (gp?.outs ?? 0) } : null;
   const slot = r.lineups[f.half].find((s) => s.player.id === b.id);
   const pos = slot ? POS_ABBR[slot.pos] : b.position;
@@ -102,8 +104,10 @@ export function watchView(app: App): string {
   const f = w.replay.frames[w.at], r = w.replay.result;
   const final = f.kind === 'final';
   const [away, home] = r.teamIds;
-  const sub = final ? `FINAL${r.innings > 9 ? ` IN ${r.innings}` : ''} · FIRST PITCH ${formatStart(r.start)} · YEAR 1`
-    : `${f.half ? 'BOTTOM' : 'TOP'} ${ordinal(f.inning).toUpperCase()} · FIRST PITCH ${formatStart(r.start)} · YEAR 1`;
+  const sr = findSeries(app.game!, r.series);
+  const tail = sr ? `${seriesShort(sr)} GAME ${r.game}` : r.kind === 'tiebreak' ? 'GAME 163' : 'YEAR 1';
+  const sub = final ? `FINAL${r.innings > 9 ? ` IN ${r.innings}` : ''} · FIRST PITCH ${formatStart(r.start)} · ${tail}`
+    : `${f.half ? 'BOTTOM' : 'TOP'} ${ordinal(f.inning).toUpperCase()} · FIRST PITCH ${formatStart(r.start)} · ${tail}`;
   const controls = final
     ? btn('BOX SCORE', 'w-box', { icon: 'box' }) + btn('HOME', 'go', { kind: 'primary', icon: 'temple', data: { to: 'home' } })
     : btn('NEXT PITCH', 'w-pitch', { kind: 'primary', icon: 'ball', title: 'Space bar' })

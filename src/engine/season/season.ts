@@ -18,6 +18,7 @@ import { simulateGame } from '../game/game';
 import { newBatLine, newPitchLine, type BatLine, type GameResult, type PitchLine, type TeamGameSetup } from '../game/types';
 import { createRng, type Rng } from '../rng';
 import type { League, Player } from '../types';
+import { postseasonAfterDay, type Postseason } from './postseason';
 import { buildSchedule, type Schedule } from './schedule';
 import { buildTeamPlans, type TeamPlan } from './teams';
 
@@ -29,6 +30,8 @@ export const FATIGUE = {
   minDaysBetweenStarts: 3,
   /** A starter can take the ball at or below this; four-man rotations run hotter by design. */
   startMax: { 4: 30, 5: 20, 6: 20 } as Record<4 | 5 | 6, number>,
+  /** Postseason starters go on normal rest: four full days between starts. */
+  postseasonRest: 5,
 };
 
 export interface StandingRow {
@@ -58,24 +61,38 @@ export interface Season {
   pitching: Map<number, PitchLine>;
   results: GameResult[];
   keepLogs: boolean;
+  /** Days in the regular schedule. The schedule grows past it for Game 163s and the postseason. */
+  regularDays: number;
+  /** Play the postseason after the regular season (the game does; calibration and stat tools don't). */
+  postseason: boolean;
+  post: Postseason | null;
+  /** Postseason stats, kept apart from the regular season's (Game 163s count as regular season). */
+  postBatting: Map<number, BatLine>;
+  postPitching: Map<number, PitchLine>;
 }
 
 export function createSeason(
-  league: League, params: AtBatParams, opts: { year: number; seed: number; logs?: boolean; schedule?: Schedule },
+  league: League, params: AtBatParams, opts: { year: number; seed: number; logs?: boolean; schedule?: Schedule; postseason?: boolean },
 ): Season {
   const standings = new Map<number, StandingRow>();
   for (const t of league.teams) {
     standings.set(t.id, { teamId: t.id, W: 0, L: 0, RS: 0, RA: 0, homeW: 0, homeL: 0, awayW: 0, awayL: 0, streak: 0, last10: [] });
   }
+  const schedule = opts.schedule ?? buildSchedule(league, opts.year, opts.seed ^ 0x5bd1e995);
   return {
     year: opts.year, league, players: new Map(league.players.map((p) => [p.id, p])), params,
-    rng: createRng(opts.seed), schedule: opts.schedule ?? buildSchedule(league, opts.year, opts.seed ^ 0x5bd1e995), day: 0,
+    rng: createRng(opts.seed), schedule, day: 0,
     plans: buildTeamPlans(league), rotationNext: new Map(), lastGameDay: new Map(), lastStartDay: new Map(), fatigue: new Map(),
     standings, batting: new Map(), pitching: new Map(), results: [], keepLogs: !!opts.logs,
+    regularDays: schedule.days, postseason: !!opts.postseason, post: null, postBatting: new Map(), postPitching: new Map(),
   };
 }
 
-export const isOver = (s: Season) => s.day >= s.schedule.days;
+/** The year is done: the regular season, and the postseason when it's on. */
+export const isOver = (s: Season) => s.day >= s.schedule.days && (!s.postseason || s.post?.phase === 'done');
+/** The regular season (Game 163s included) is done. */
+export const regularOver = (s: Season) => s.day >= s.regularDays && (!s.postseason || (!!s.post && s.post.phase !== 'tiebreak'));
+export const inPostseason = (s: Season) => s.post?.phase === 'post';
 
 /** Simulate one calendar day (may be an off day for everyone). */
 export function simDay(s: Season): GameResult[] {
@@ -86,14 +103,18 @@ export function simDay(s: Season): GameResult[] {
     s.fatigue.set(id, Math.max(0, f - FATIGUE.recovery * (1 + bonus)));
   }
   const played: GameResult[] = [];
-  for (const g of s.schedule.byDay[s.day]) {
-    const away = setupFor(s, g.away), home = setupFor(s, g.home);
+  for (const g of s.schedule.byDay[s.day] ?? []) {
+    const post = g.kind === 'post';
+    const away = setupFor(s, g.away, post), home = setupFor(s, g.home, post);
     const res = simulateGame(away, home, s.params, s.rng, { log: s.keepLogs });
     res.day = s.day; res.start = g.start;
+    if (g.kind) res.kind = g.kind;
+    if (g.series) { res.series = g.series; res.game = g.game; }
     record(s, res);
     played.push(res);
   }
   s.day++;
+  postseasonAfterDay(s);
   return played;
 }
 
@@ -115,12 +136,19 @@ export function recoveredFatigue(s: Season, id: number): number {
 interface StartPlan { starter: Player; next: number; bullpen: TeamGameSetup['bullpen'] }
 
 /** Rotation logic. Pure: reads the season, changes nothing. */
-function planStart(s: Season, teamId: number, fat: (id: number) => number): StartPlan {
+function planStart(s: Season, teamId: number, fat: (id: number) => number, post = false): StartPlan {
   const plan = s.plans.get(teamId)!;
   const rot = plan.rotation, N = rot.length;
   const startMax = FATIGUE.startMax[plan.strategy.rotationSize];
   const ready = (p: Player) => fat(p.id) <= startMax && s.day - (s.lastStartDay.get(p.id) ?? -99) >= FATIGUE.minDaysBetweenStarts;
   let due = s.rotationNext.get(teamId) ?? 0;
+
+  // October: the best rested arm of the top four (then the rest of the rotation), on normal rest; short rest only for boosted recovery.
+  if (post) {
+    const rest = (p: Player) => ((p.abilities?.bounceBack ?? 0) > 0 ? FATIGUE.minDaysBetweenStarts : FATIGUE.postseasonRest);
+    const ace = [...rot.slice(0, Math.min(4, N)), ...rot.slice(4)].find((p) => fat(p.id) <= startMax && s.day - (s.lastStartDay.get(p.id) ?? -99) >= rest(p));
+    if (ace) return { starter: ace, next: due, bullpen: plan.bullpen };
+  }
 
   // Skip the fifth after an off day if the ace is ready.
   const offDayBefore = (s.lastGameDay.get(teamId) ?? -99) < s.day - 1;
@@ -149,12 +177,13 @@ function planStart(s: Season, teamId: number, fat: (id: number) => number): Star
 
 /** Today's probable starter for a team (call before the day is simmed). Changes nothing. */
 export function peekStarter(s: Season, teamId: number): Player {
-  return planStart(s, teamId, (id) => recoveredFatigue(s, id)).starter;
+  const post = s.schedule.byDay[s.day]?.some((g) => g.kind === 'post' && (g.home === teamId || g.away === teamId)) ?? false;
+  return planStart(s, teamId, (id) => recoveredFatigue(s, id), post).starter;
 }
 
-function setupFor(s: Season, teamId: number): TeamGameSetup {
+function setupFor(s: Season, teamId: number, post: boolean): TeamGameSetup {
   const fat = (id: number) => s.fatigue.get(id) ?? 0;
-  const { starter, next, bullpen } = planStart(s, teamId, fat);
+  const { starter, next, bullpen } = planStart(s, teamId, fat, post);
   s.rotationNext.set(teamId, next);
   s.lastStartDay.set(starter.id, s.day);
   return { teamId, lineup: s.plans.get(teamId)!.lineup, starter, bullpen, fatigue: fat };
@@ -165,6 +194,16 @@ const addInto = <T extends object>(into: T, from: T) => { for (const k in from) 
 function record(s: Season, g: GameResult): void {
   s.results.push(g);
   const [away, home] = g.teamIds;
+  const post = g.kind === 'post';
+  const batting = post ? s.postBatting : s.batting, pitching = post ? s.postPitching : s.pitching;
+  for (const [id, b] of g.batting) { let l = batting.get(id); if (!l) batting.set(id, (l = newBatLine())); addInto(l, b); }
+  for (const [id, p] of g.pitching) {
+    let l = pitching.get(id); if (!l) pitching.set(id, (l = newPitchLine())); addInto(l, p);
+    const budget = g.budgets.get(id) ?? 100;
+    s.fatigue.set(id, Math.min(100, (s.fatigue.get(id) ?? 0) + FATIGUE.appearance + FATIGUE.perBudget * (p.P / budget)));
+  }
+  for (const id of g.teamIds) s.lastGameDay.set(id, s.day);
+  if (post) return;
   const homeWon = g.score[1] > g.score[0];
   for (const [id, won, rs, ra, isHome] of [[away, !homeWon, g.score[0], g.score[1], false], [home, homeWon, g.score[1], g.score[0], true]] as const) {
     const row = s.standings.get(id)!;
@@ -172,13 +211,6 @@ function record(s: Season, g: GameResult): void {
     if (won) { row.W++; if (isHome) row.homeW++; else row.awayW++; row.streak = row.streak > 0 ? row.streak + 1 : 1; }
     else { row.L++; if (isHome) row.homeL++; else row.awayL++; row.streak = row.streak < 0 ? row.streak - 1 : -1; }
     row.last10.push(won ? 1 : 0); if (row.last10.length > 10) row.last10.shift();
-    s.lastGameDay.set(id, s.day);
-  }
-  for (const [id, b] of g.batting) { let l = s.batting.get(id); if (!l) s.batting.set(id, (l = newBatLine())); addInto(l, b); }
-  for (const [id, p] of g.pitching) {
-    let l = s.pitching.get(id); if (!l) s.pitching.set(id, (l = newPitchLine())); addInto(l, p);
-    const budget = g.budgets.get(id) ?? 100;
-    s.fatigue.set(id, Math.min(100, (s.fatigue.get(id) ?? 0) + FATIGUE.appearance + FATIGUE.perBudget * (p.P / budget)));
   }
 }
 

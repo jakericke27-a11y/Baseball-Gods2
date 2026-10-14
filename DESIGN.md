@@ -78,8 +78,16 @@ sac flies, steals, wild pitches/passed balls, errors (glove), extra innings, wal
   60 + stamina (fade starts at 65% of budget). Relievers get a planned stint from stamina (30 ≈ 1 IP, 45 ≈ 2,
   60 ≈ 3): closer finishes (six-out saves with stamina ≥ 45), setup covers 7th–8th, long men 2–3 IP,
   middle relief soaks blowouts. Early hooks only for runs allowed, pitch count, or the 9th-inning save handoff.
-- **Standings:** W-L, GB, RS/RA, home/away, streak, last 10; ties currently broken by run differential.
-  2019 playoff picture (3 division winners + 2 wild cards per league). Playoff games not yet simulated.
+- **Standings:** W-L, GB, RS/RA, home/away, streak, last 10; display ties broken by run differential.
+- **Postseason** (`season/postseason.ts`, 2019 format): 3 division winners (seeds 1–3) + 2 wild cards per league;
+  one-game wild card, best-of-5 DS (2-2-1; 1 vs the wild card winner, 2 vs 3), best-of-7 LCS and final (2-3-2;
+  final home field to the better record). The final is the **Galaxy Series** (working name). Ties for a division or
+  the last wild card are played off as Game 163s, which count in regular-season standings and stats (a 3-way tie is
+  a ladder over consecutive days); other seeding ties: head-to-head, then run differential. Calendar: an off day
+  after the season (none after a Game 163), then rounds on fixed starts with travel days inside series. October
+  starters: the best rested of the top four (then the rest), on normal rest (5 days start to start) unless boosted
+  recovery. Postseason stats are kept apart. The schedule grows as games are added, so `isOver` means the whole
+  year; `regularOver` the regular season. Calibration and stat tools play regular seasons only.
 
 ## Event log (`src/engine/log.ts`)
 Per game: PA events (inning/half, outs+bases before, batter, pitcher, play, fielder+batted-ball type,
@@ -149,6 +157,8 @@ New-engine guards: runs vs BaseRuns check, RBI ≤ R, per-team start limits by r
   devices. A profile store (IndexedDB `profile`) is ready for what outlives a league. The 10-character password
   stays as it was (seed, team, day; replayed). Without a database (private windows, a headless DOM) the autosave
   falls back to that replay save. Old saves replay once, then become full saves.
+- 2026-10-14 — Postseason (step 1.2): 2019 format, Game 163 tiebreakers, real October rest, "Galaxy Series" as
+  the final's working name. TO END stops when the field is set; pressed again it plays out October.
 
 ## Design philosophy (2026-10-03)
 Realistic baseline; the fun is in finding combinations that BREAK it (ratings + abilities + favor +

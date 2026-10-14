@@ -9,12 +9,13 @@
 import type { AtBatParams } from './atbat/params';
 import type { BatLine, BullpenRole, GameMoment, GameResult, PitchLine } from './game/types';
 import { createRng, type RngState } from './rng';
+import type { Postseason } from './season/postseason';
 import type { Schedule, ScheduledGame } from './season/schedule';
 import type { Season, StandingRow } from './season/season';
 import type { TeamPlan } from './season/teams';
 import type { League, TeamStrategy } from './types';
 
-export const SNAPSHOT_VERSION = 1;
+export const SNAPSHOT_VERSION = 2;
 
 type Entries<V> = Array<[number, V]>;
 
@@ -29,6 +30,7 @@ export interface ResultSnap {
   moments: GameMoment[];
   /** Index into the snapshot's log list, or -1 when the game kept no log. */
   log: number;
+  kind?: 'tiebreak' | 'post'; series?: string; game?: number;
 }
 
 export interface SeasonSnap {
@@ -49,6 +51,12 @@ export interface SeasonSnap {
   pitching: Entries<PitchLine>;
   results: ResultSnap[];
   keepLogs: boolean;
+  // v2: the postseason
+  regularDays: number;
+  postseason: boolean;
+  post: Postseason | null;
+  postBatting: Entries<BatLine>;
+  postPitching: Entries<PitchLine>;
 }
 
 const ents = <V>(m: Map<number, V>): Entries<V> => [...m];
@@ -64,6 +72,7 @@ export function snapshotSeason(s: Season): { data: SeasonSnap; logs: Uint8Array[
       hits: g.hits, errors: g.errors, lob: g.lob, outsRecorded: g.outsRecorded, batting: ents(g.batting), pitching: ents(g.pitching),
       lineups: [g.lineups[0].map((l) => [l.player.id, l.pos]), g.lineups[1].map((l) => [l.player.id, l.pos])],
       pitchersUsed: g.pitchersUsed, decisions: g.decisions, budgets: ents(g.budgets), pitchResults: g.pitchResults, moments: g.moments, log,
+      ...(g.kind ? { kind: g.kind } : {}), ...(g.series ? { series: g.series, game: g.game } : {}),
     };
   });
   const data: SeasonSnap = {
@@ -76,13 +85,17 @@ export function snapshotSeason(s: Season): { data: SeasonSnap; logs: Uint8Array[
     })),
     rotationNext: ents(s.rotationNext), lastGameDay: ents(s.lastGameDay), lastStartDay: ents(s.lastStartDay), fatigue: ents(s.fatigue),
     standings: [...s.standings.values()], batting: ents(s.batting), pitching: ents(s.pitching), results, keepLogs: s.keepLogs,
+    regularDays: s.regularDays, postseason: s.postseason, post: s.post, postBatting: ents(s.postBatting), postPitching: ents(s.postPitching),
   };
   // A deep copy, so the snapshot never shares objects with the live season.
   return { data: clone(data), logs: logs.map((l) => l.slice()) };
 }
 
 /** Upgrade steps: UPGRADES[n] turns a version-n snapshot into version n+1. */
-const UPGRADES: Record<number, (s: SeasonSnap) => SeasonSnap> = {};
+const UPGRADES: Record<number, (s: SeasonSnap) => SeasonSnap> = {
+  // v1 → v2: the postseason. Only the game wrote v1 saves, and the game plays the postseason.
+  1: (s) => ({ ...s, v: 2, regularDays: s.schedule.days, postseason: true, post: null, postBatting: [], postPitching: [] }),
+};
 
 export function upgradeSnapshot(s: SeasonSnap): SeasonSnap {
   let cur = s;
@@ -113,11 +126,13 @@ export function restoreSeason(snap: SeasonSnap, logs: Uint8Array[]): Season {
     lineups: [r.lineups[0].map(([id, pos]) => ({ player: P(id), pos })), r.lineups[1].map(([id, pos]) => ({ player: P(id), pos }))],
     pitchersUsed: r.pitchersUsed, decisions: r.decisions, budgets: new Map(r.budgets), pitchResults: r.pitchResults, moments: r.moments,
     log: r.log >= 0 ? logs[r.log] ?? null : null,
+    ...(r.kind ? { kind: r.kind } : {}), ...(r.series ? { series: r.series, game: r.game } : {}),
   }));
   return {
     year: d.year, league, players, params: d.params, rng: createRng(0, d.rng), schedule, day: d.day, plans,
     rotationNext: new Map(d.rotationNext), lastGameDay: new Map(d.lastGameDay), lastStartDay: new Map(d.lastStartDay),
     fatigue: new Map(d.fatigue), standings: new Map(d.standings.map((r) => [r.teamId, r])),
     batting: new Map(d.batting), pitching: new Map(d.pitching), results, keepLogs: d.keepLogs,
+    regularDays: d.regularDays, postseason: d.postseason, post: d.post, postBatting: new Map(d.postBatting), postPitching: new Map(d.postPitching),
   };
 }

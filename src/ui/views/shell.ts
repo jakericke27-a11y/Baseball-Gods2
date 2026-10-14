@@ -92,8 +92,15 @@ function playerCard(app: App, id: number): string {
   const body = `<p class="pc-line">${esc(role)} · bats ${p.bats}, throws ${p.throws} · age ${p.age} · ${esc(teamName(teamId))}</p>
 <p class="pc-line muted">Born in ${esc(region?.name ?? 'parts unknown')}${region ? ` (${esc(region.environment.replace(/_/g, ' '))})` : ''}</p>
 <div class="rgrid">${isP ? arm + field + clutch : hit + field + clutch}</div>
-<h3 class="pc-h">YEAR 1</h3><p class="pc-line">${line}</p><p class="pc-line muted small">Ratings show to the nearest 5 on the 20–80 scouting scale.</p>`;
+<h3 class="pc-h">YEAR 1</h3><p class="pc-line">${line}</p>${postLine(g, id, isP)}<p class="pc-line muted small">Ratings show to the nearest 5 on the 20–80 scouting scale.</p>`;
   return modal('pc-t', esc(p.name), body);
+}
+
+function postLine(g: NonNullable<App['game']>, id: number, isP: boolean): string {
+  const b = g.season.postBatting.get(id), q = g.season.postPitching.get(id);
+  const line = isP ? (q ? `${q.W}-${q.L} · ${era2(era(q))} ERA · ${ip(q.outs)} IP · ${q.K} SO · ${q.SV} SV · ${q.G} G, ${q.GS} GS` : '')
+    : (b ? `${rate3(avg(b))}/${rate3(obp(b))}/${rate3(slg(b))} · ${b.HR} HR · ${b.RBI} RBI · ${b.PA} PA` : '');
+  return line ? `<h3 class="pc-h">POSTSEASON</h3><p class="pc-line">${line}</p>` : '';
 }
 
 function settingsModal(app: App): string {

@@ -80,4 +80,8 @@ export interface GameResult {
   pitchResults: number[];             // counts by PitchResult
   moments: GameMoment[];
   log: Uint8Array | null;
+  /** Copied from the scheduled game by the season loop: regular (unset), a Game 163, or postseason. */
+  kind?: 'tiebreak' | 'post';
+  series?: string;
+  game?: number;
 }

@@ -3,6 +3,7 @@
  * in step. Screens are HTML strings (views/); one delegated listener handles every button.
  */
 import type { PitchDetail } from '../engine/game/text';
+import { regularOver } from '../engine/season/season';
 import { lightingAt, type Lighting } from '../engine/season/schedule';
 import type { League } from '../engine/types';
 import { generateLeague } from '../engine/generate';
@@ -263,7 +264,7 @@ export class App {
     const g = this.game;
     if (!g) return;
     if (g.over) { void this.music.play('offseason'); return; }
-    void this.music.play(g.season.schedule.days - g.day <= 30 ? 'pennant' : 'hub');
+    void this.music.play(g.season.regularDays - g.day <= 30 ? 'pennant' : 'hub');
   }
 
   showToast(text: string): void {
@@ -344,10 +345,13 @@ export class App {
       this.render();
       return;
     }
-    const target = span === 'end' ? g.season.schedule.days : Math.min(g.season.schedule.days, g.day + span);
+    // The schedule grows in October (Game 163s, each new round), so spans are counted in days, not schedule length.
+    const toPost = span === 'end' && !regularOver(g.season);
     const from = g.day;
-    await this.withBusy(span === 'end' ? 'Simming to the end of the year' : `Simming ${target - from} days`, target - from, true, async (step) => {
-      while (g.day < target && !this.stop) {
+    const target = span === 'end' ? Infinity : g.day + span; // to the end of the regular season includes any Game 163
+    const total = span === 'end' ? Math.max(1, (toPost ? g.season.regularDays : g.season.schedule.days) - from) : span;
+    await this.withBusy(span === 'end' ? (toPost ? 'Simming to the end of the regular season' : 'Simming the rest of the postseason') : `Simming ${span} days`, total, true, async (step) => {
+      while (g.day < target && !g.over && !this.stop && !(toPost && regularOver(g.season))) {
         g.simDay();
         await step(g.day - from, g.headlines.at(-1)?.text);
       }
