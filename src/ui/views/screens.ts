@@ -3,6 +3,8 @@ import { decodeEvents, eventText, halfLabel, POS_ABBR } from '../../engine/game/
 import type { GameResult } from '../../engine/game/types';
 import { peekStarter, recoveredFatigue } from '../../engine/season/season';
 import { formatStart } from '../../engine/season/schedule';
+import { playerValue } from '../../engine/development';
+import { activeOf, canOption, movesLeft, optionsLeft, RULES, waiverPlayer } from '../../engine/roster';
 import type { App } from '../app';
 import { dateLabel, shortDate } from '../calendar';
 import type { Game } from '../state';
@@ -159,37 +161,84 @@ function fatigueBar(f: number): string {
 export function rosterView(app: App): string {
   const g = app.game!;
   const teamId = app.rosterTeam || g.userTeam;
+  const mine = teamId === g.userTeam;
   const plan = g.season.plans.get(teamId)!;
   const team = g.league.teams.find((t) => t.id === teamId)!;
+  const active = new Set(activeOf(team));
   const players = team.playerIds.map((id) => g.players.get(id)!);
+  const auto = team.auto ?? { lineup: true, staff: true, roster: true };
+  const tab = mine ? app.rosterTab : app.rosterTab === 'moves' ? 'lineup' : app.rosterTab;
   const sel = `<label class="team-select"><span class="k">TEAM</span><select data-act="roster-team" id="roster-team">${g.league.teams.map((t) => `<option value="${t.id}"${t.id === teamId ? ' selected' : ''}>${esc(teamName(t.id))}${t.id === g.userTeam ? ' (you)' : ''}</option>`).join('')}</select></label>`;
-  const batRow = (p: (typeof players)[0], order: string, pos: string) => {
-    const l = g.season.batting.get(p.id), R = p.ratings;
-    return `<tr><td>${order}</td><th scope="row">${link(p.name, 'player', { id: p.id })}</th><td>${pos}</td><td>${p.bats}</td><td>${p.age}</td><td>${r5(R.power)}</td><td>${r5(R.contact)}</td><td>${r5(R.discipline)}</td><td>${r5(R.speed)}</td><td>${r5(R.instincts)}</td><td>${r5(R.glove)}</td><td>${r5(R.cannon)}</td>
-<td>${l ? rate3(avg(l)) : '—'}</td><td>${l ? rate3(obp(l)) : '—'}</td><td>${l ? rate3(slg(l)) : '—'}</td><td>${l?.HR ?? 0}</td><td>${l?.RBI ?? 0}</td><td>${l?.SB ?? 0}</td></tr>`;
-  };
-  const batHead = '<tr><th scope="col">#</th><th scope="col">NAME</th><th scope="col">POS</th><th scope="col">B</th><th scope="col">AGE</th><th scope="col">POW</th><th scope="col">CON</th><th scope="col">EYE</th><th scope="col">SPD</th><th scope="col">RNG</th><th scope="col">GLV</th><th scope="col">ARM</th><th scope="col">AVG</th><th scope="col">OBP</th><th scope="col">SLG</th><th scope="col">HR</th><th scope="col">RBI</th><th scope="col">SB</th></tr>';
-  const lineup = plan.lineup.map((s, i) => batRow(s.player, String(i + 1), POS_ABBR[s.pos])).join('');
-  const inLineup = new Set(plan.lineup.map((s) => s.player.id));
-  const bench = players.filter((p) => p.position !== 'P' && !inLineup.has(p.id)).map((p) => batRow(p, '', p.position)).join('');
-  const armRow = (p: (typeof players)[0], lead: string, isStarter: boolean) => {
-    const l = g.season.pitching.get(p.id), R = p.ratings;
-    const f = recoveredFatigue(g.season, p.id);
-    return `<tr><td>${lead}</td><th scope="row">${link(p.name, 'player', { id: p.id })}</th><td>${p.throws}</td><td>${p.age}</td><td>${r5(R.velocity)}</td><td>${r5(R.control)}</td><td>${r5(R.movement)}</td><td>${r5(R.stamina)}</td><td>${fatigueBar(f)}</td>
-<td>${l ? `${l.W}-${l.L}` : '0-0'}</td><td>${l ? era2(era(l)) : '—'}</td><td>${l ? ip(l.outs) : '0.0'}</td><td>${l?.K ?? 0}</td><td>${isStarter ? (l?.GS ?? 0) : (l?.SV ?? 0)}</td><td>${l ? whip(l).toFixed(2) : '—'}</td></tr>`;
-  };
-  const armHead = (last: string) => `<tr><th scope="col"></th><th scope="col">NAME</th><th scope="col">T</th><th scope="col">AGE</th><th scope="col">VEL</th><th scope="col">CTL</th><th scope="col">MOV</th><th scope="col">STA</th><th scope="col">FATIGUE</th><th scope="col">W-L</th><th scope="col">ERA</th><th scope="col">IP</th><th scope="col">SO</th><th scope="col">${last}</th><th scope="col">WHIP</th></tr>`;
-  const rot = plan.rotation.map((p, i) => armRow(p, String(i + 1), true)).join('');
-  const pen = plan.bullpen.map((a) => armRow(a.player, a.role, false)).join('');
-  const inStaff = new Set([...plan.rotation, ...plan.bullpen.map((a) => a.player)].map((p) => p.id));
-  const extra = players.filter((p) => p.position === 'P' && !inStaff.has(p.id)).map((p) => armRow(p, '—', false)).join('');
-  const rs = g.season.standings.get(teamId)!;
+  const tabs = [['lineup', 'LINEUP'], ['staff', 'PITCHING'], ...(mine ? [['moves', '26 & RESERVES']] : [])]
+    .map(([k, label]) => `<button type="button" class="tab${tab === k ? ' on' : ''}" data-act="roster-tab" data-tab="${k}" data-key="roster-tab:${k}" aria-pressed="${tab === k}">${label}</button>`).join('');
+  const autoBtn = (part: 'lineup' | 'staff' | 'roster') => mine
+    ? `<button type="button" class="btn btn-ghost auto-btn${auto[part] ? ' on' : ''}" data-act="roster-auto" data-part="${part}" data-key="roster-auto:${part}" aria-pressed="${auto[part]}" title="${auto[part] ? 'The AI runs this. Change anything to take over.' : 'You run this. Turn AUTO on to hand it back to the AI.'}"><span>AUTO ${auto[part] ? 'ON' : 'OFF'}</span></button>` : '';
   const tbl = (head: string, rows: string, label: string) => `<div class="hscroll"><table class="stat roster" aria-label="${label}">${head}${rows}</table></div>`;
+  const batStats = (p: (typeof players)[0]) => {
+    const l = g.season.batting.get(p.id), R = p.ratings;
+    return `<td>${p.bats}</td><td>${p.age}</td><td>${r5(R.power)}</td><td>${r5(R.contact)}</td><td>${r5(R.discipline)}</td><td>${r5(R.speed)}</td><td>${r5(R.instincts)}</td><td>${r5(R.glove)}</td><td>${r5(R.cannon)}</td>
+<td>${l ? rate3(avg(l)) : '—'}</td><td>${l ? rate3(obp(l)) : '—'}</td><td>${l ? rate3(slg(l)) : '—'}</td><td>${l?.HR ?? 0}</td><td>${l?.RBI ?? 0}</td>`;
+  };
+  const batCols = '<th scope="col">B</th><th scope="col">AGE</th><th scope="col">POW</th><th scope="col">CON</th><th scope="col">EYE</th><th scope="col">SPD</th><th scope="col">RNG</th><th scope="col">GLV</th><th scope="col">ARM</th><th scope="col">AVG</th><th scope="col">OBP</th><th scope="col">SLG</th><th scope="col">HR</th><th scope="col">RBI</th>';
+  const armStats = (p: (typeof players)[0], starter: boolean) => {
+    const l = g.season.pitching.get(p.id), R = p.ratings;
+    return `<td>${p.throws}</td><td>${p.age}</td><td>${r5(R.velocity)}</td><td>${r5(R.control)}</td><td>${r5(R.movement)}</td><td>${r5(R.stamina)}</td><td>${fatigueBar(recoveredFatigue(g.season, p.id))}</td>
+<td>${l ? `${l.W}-${l.L}` : '0-0'}</td><td>${l ? era2(era(l)) : '—'}</td><td>${l ? ip(l.outs) : '0.0'}</td><td>${l?.K ?? 0}</td><td>${starter ? (l?.GS ?? 0) : (l?.SV ?? 0)}</td>`;
+  };
+  const armCols = (last: string) => `<th scope="col">T</th><th scope="col">AGE</th><th scope="col">VEL</th><th scope="col">CTL</th><th scope="col">MOV</th><th scope="col">STA</th><th scope="col">FATIGUE</th><th scope="col">W-L</th><th scope="col">ERA</th><th scope="col">IP</th><th scope="col">SO</th><th scope="col">${last}</th>`;
+  const name = (p: (typeof players)[0]) => `<th scope="row">${link(p.name, 'player', { id: p.id })}</th>`;
+  const updown = (act: string, i: number, n: number) => mine
+    ? `<td class="ud">${btn('', act, { icon: 'left', data: { i, dir: -1 }, disabled: i === 0, title: 'Move up', cls: 'btn-icon btn-ghost up' })}${btn('', act, { icon: 'right', data: { i, dir: 1 }, disabled: i === n - 1, title: 'Move down', cls: 'btn-icon btn-ghost down' })}</td>` : '';
+  let body = '';
+  if (tab === 'lineup') {
+    const bench = players.filter((p) => p.position !== 'P' && active.has(p.id) && !plan.lineup.some((l) => l.player.id === p.id));
+    const posSel = (i: number, pos: number) => `<select data-act="lineup-pos" data-i="${i}" aria-label="Position">${[2, 3, 4, 5, 6, 7, 8, 9, 0].map((n) => `<option value="${n}"${n === pos ? ' selected' : ''}>${POS_ABBR[n]}</option>`).join('')}</select>`;
+    const subSel = (i: number) => bench.length ? `<select data-act="lineup-sub" data-i="${i}" aria-label="Bring in from the bench"><option value="">BENCH…</option>${bench.map((p) => `<option value="${p.id}">${esc(p.name)} (${p.position})</option>`).join('')}</select>` : '';
+    const rows = plan.lineup.map((l, i) => `<tr><td>${i + 1}</td>${updown('lineup-move', i, plan.lineup.length)}${name(l.player)}<td>${mine ? posSel(i, l.pos) : POS_ABBR[l.pos]}</td><td>${l.player.position}</td>${batStats(l.player)}${mine ? `<td>${subSel(i)}</td>` : ''}</tr>`).join('');
+    const head = `<tr><th scope="col">#</th>${mine ? '<th scope="col"></th>' : ''}<th scope="col">NAME</th><th scope="col">PLAYS</th><th scope="col">POS</th>${batCols}${mine ? '<th scope="col">SWAP IN</th>' : ''}</tr>`;
+    const benchRows = bench.map((p) => `<tr><td></td>${mine ? '<td></td>' : ''}${name(p)}<td>—</td><td>${p.position}</td>${batStats(p)}${mine ? '<td></td>' : ''}</tr>`).join('');
+    body = win({ id: 'w-lineup', title: 'Lineup', label: 'BATTING ORDER', body: `${mine ? `<div class="row-actions">${autoBtn('lineup')}<span class="note small muted">Order with the arrows; pick each spot's position; swap a bench bat into any spot.</span></div>` : ''}${tbl(head, rows, 'Lineup')}` })
+      + win({ id: 'w-bench', title: 'Bench', label: 'ACTIVE, NOT STARTING', body: tbl(head, benchRows, 'Bench') });
+  } else if (tab === 'staff') {
+    const rotSel = (i: number) => `<select data-act="rot-swap" data-i="${i}" aria-label="Swap with a reliever"><option value="">FROM THE PEN…</option>${plan.bullpen.map((a) => `<option value="${a.player.id}">${esc(a.player.name)} (${a.role})</option>`).join('')}</select>`;
+    const roleSel = (i: number, role: string) => `<select data-act="pen-role" data-i="${i}" aria-label="Role">${['CL', 'SU', 'MR', 'LR'].map((r) => `<option value="${r}"${r === role ? ' selected' : ''}>${r}</option>`).join('')}</select>`;
+    const rot = plan.rotation.map((p, i) => `<tr><td>${i + 1}</td>${updown('rot-move', i, plan.rotation.length)}${name(p)}${armStats(p, true)}${mine ? `<td>${rotSel(i)}</td>` : ''}</tr>`).join('');
+    const pen = plan.bullpen.map((a, i) => `<tr><td>${mine ? roleSel(i, a.role) : a.role}</td>${mine ? '<td></td>' : ''}${name(a.player)}${armStats(a.player, false)}${mine ? '<td></td>' : ''}</tr>`).join('');
+    const head = (last: string, lead: string) => `<tr><th scope="col">${lead}</th>${mine ? '<th scope="col"></th>' : ''}<th scope="col">NAME</th>${armCols(last)}${mine ? '<th scope="col">SWAP</th>' : ''}</tr>`;
+    body = win({ id: 'w-rot', title: 'Rotation', label: `${team.strategy.rotationSize}-MAN · FATIGUE AS OF TODAY`, body: `${mine ? `<div class="row-actions">${autoBtn('staff')}<span class="note small muted">Order the rotation; swap a reliever into a start; set bullpen roles.</span></div>` : ''}${tbl(head('GS', '#'), rot, 'Rotation')}` })
+      + win({ id: 'w-pen', title: 'Bullpen', label: 'CL CLOSER · SU SETUP · LR LONG · MR MIDDLE', body: tbl(head('SV', 'ROLE'), pen, 'Bullpen') });
+  } else {
+    const left = movesLeft(team, g.day);
+    const opt = (p: (typeof players)[0]) => (p.optionedThisYear ? `<span class="muted">option used · ${Math.max(0, optionsLeft(p) - 1)} after</span>` : optionsLeft(p) > 0 ? `${optionsLeft(p)} left` : '<span class="warn">OUT · waivers</span>');
+    const relBtn = (p: (typeof players)[0]) => app.releaseArmed === p.id
+      ? btn('CONFIRM', 'release', { kind: 'primary', data: { id: p.id }, title: 'He goes on waivers for 3 days; unclaimed, he becomes a free agent' })
+      : btn('RELEASE', 'release-arm', { data: { id: p.id } });
+    const onWaivers = new Set(g.league.waivers.map((w) => w.playerId));
+    const line = (p: (typeof players)[0], extra: string) => `<tr>${name(p)}<td>${p.position === 'P' ? p.pitcherRole : p.position}</td><td>${p.age}</td><td>${Math.round(playerValue(p))}</td><td>${opt(p)}</td><td class="acts">${extra}</td></tr>`;
+    const head = (k: string) => `<tr><th scope="col">${k}</th><th scope="col">POS</th><th scope="col">AGE</th><th scope="col">NOW</th><th scope="col">OPTIONS</th><th scope="col"></th></tr>`;
+    const group = (pitchers: boolean, inActive: boolean) => players.filter((p) => (p.position === 'P') === pitchers && active.has(p.id) === inActive).sort((a, b) => playerValue(b) - playerValue(a));
+    const callSel = (p: (typeof players)[0]) => onWaivers.has(p.id) ? '<span class="muted">on waivers</span>'
+      : `<select data-act="call-up" data-id="${p.id}" aria-label="Call up for"${left <= 0 ? ' disabled' : ''}><option value="">CALL UP FOR…</option>${group(p.position === 'P', true).map((q) => `<option value="${q.id}">${esc(q.name)} (${q.position === 'P' ? q.pitcherRole : q.position}${canOption(q) ? '' : ', to waivers'})</option>`).join('')}</select>`;
+    const act = [...group(false, true), ...group(true, true)].map((p) => line(p, relBtn(p))).join('');
+    const res = [...group(false, false), ...group(true, false)].map((p) => line(p, callSel(p) + relBtn(p))).join('');
+    const waivers = g.league.waivers.map((w) => {
+      const p = waiverPlayer(g.league, w);
+      if (!p) return '';
+      const claimed = w.claims.includes(g.userTeam), ours = w.fromTeam === g.userTeam;
+      return `<tr><th scope="row">${esc(p.name)}</th><td>${p.position}</td><td>${p.age}</td><td>${Math.round(playerValue(p))}</td><td>${esc(teamName(w.fromTeam))} · clears ${shortDate(w.until)}</td><td class="acts">${ours ? '<span class="muted">yours</span>' : btn(claimed ? 'CLAIMED' : 'CLAIM', 'claim', { kind: claimed ? 'primary' : 'secondary', data: { id: p.id } })}</td></tr>`;
+    }).join('');
+    const room = team.playerIds.length < 40;
+    const fas = [...g.league.freeAgents].sort((a, b) => playerValue(b) - playerValue(a)).slice(0, 15)
+      .map((p) => `<tr><th scope="row">${esc(p.name)}</th><td>${p.position === 'P' ? (p.pitcherRole ?? 'P') : p.position}</td><td>${p.age}</td><td>${Math.round(playerValue(p))}</td><td>${optionsLeft(p)} left</td><td class="acts">${btn('SIGN', 'sign', { data: { id: p.id }, disabled: !room, title: room ? 'He joins your reserves' : 'Your 40-man roster is full: release someone first' })}</td></tr>`).join('');
+    body = `<div class="row-actions">${autoBtn('roster')}<span class="note small">${left} of ${RULES.movesPerMonth} moves left this month · ${team.playerIds.length} of 40 · a call-up sends someone of the same kind down; out of options means waivers first.</span></div>
+${win({ id: 'w-active', title: 'Active 26', label: '13 POSITION PLAYERS · 13 PITCHERS', body: tbl(head('ACTIVE'), act, 'Active roster') })}
+${win({ id: 'w-res', title: 'Reserves', label: `${team.playerIds.length - active.size} ON THE 40, NOT ACTIVE`, body: res ? tbl(head('RESERVE'), res, 'Reserves') : '<p class="note muted">Nobody on the reserves.</p>' })}
+${win({ id: 'w-waive', title: 'Waiver Wire', label: `${g.league.waivers.length} PLAYERS · WORST RECORD CLAIMS FIRST`, body: waivers ? tbl(head('PLAYER').replace('OPTIONS', 'FROM'), waivers, 'Waivers') : '<p class="note muted">Nobody on waivers.</p>' })}
+${win({ id: 'w-fa', title: 'Free Agents', label: room ? 'SIGN TO THE RESERVES' : 'YOUR 40 IS FULL', body: tbl(head('FREE AGENT'), fas, 'Free agents') })}`;
+  }
+  const rs = g.season.standings.get(teamId)!;
   return page(app, 'roster', `<div class="roster-head"><div><h2 class="page-h">${esc(teamName(teamId))}</h2><p class="page-sub">${rs.W}-${rs.L} · ${LEAGUES[team.conference]} ${DIVISIONS[team.division]} · ${team.strategy.rotationSize}-man rotation</p></div>${sel}</div>
-${win({ id: 'w-lineup', title: 'Lineup', label: 'BATTING ORDER', body: tbl(batHead, lineup, 'Lineup') })}
-${win({ id: 'w-rot', title: 'Rotation', label: 'FATIGUE AS OF TODAY', body: tbl(armHead('GS'), rot, 'Rotation') })}
-${win({ id: 'w-pen', title: 'Bullpen', label: 'CL CLOSER · SU SETUP · LR LONG · MR MIDDLE', body: tbl(armHead('SV'), pen, 'Bullpen') })}
-${win({ id: 'w-bench', title: 'Bench & Reserves', label: 'NOT IN THE LINEUP OR STAFF', body: tbl(batHead, bench, 'Bench') + (extra ? tbl(armHead('SV'), extra, 'Reserve pitchers') : '') })}`);
+<div class="tabs" role="group" aria-label="Roster views">${tabs}</div>${body}`);
 }
 
 // ------------------------------------------------------------------ game log

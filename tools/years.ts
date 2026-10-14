@@ -9,7 +9,8 @@ import { applyEnvironment, type LeagueEnvironment } from '../src/engine/atbat/en
 import { playerValue } from '../src/engine/development';
 import { generateLeague } from '../src/engine/generate';
 import { nextSeason } from '../src/engine/offseason';
-import { createSeason, simToEnd, type Season } from '../src/engine/season/season';
+import { activeOf, RULES } from '../src/engine/roster';
+import { createSeason, simDays, simToEnd, type Season } from '../src/engine/season/season';
 
 const N = Number(process.argv[2] ?? 20), SEED = Number(process.argv[3] ?? 2026);
 const P = applyEnvironment(DEFAULT_PARAMS, JSON.parse(readFileSync('calibration/baseline.json', 'utf8')) as LeagueEnvironment);
@@ -25,12 +26,19 @@ function line(s: Season) {
 }
 
 console.log(`year  age   <25%  33+%   val   sd   top30  hit   pit  |  AVG   HR/600  K%    BB%   R/G  | retire sign  FA   champ`);
-let s = createSeason(generateLeague(SEED), P, { year: 1, seed: SEED, postseason: true });
+let s = createSeason(generateLeague(SEED), P, { year: 1, seed: SEED, postseason: true, rosterRules: true });
 const t0 = performance.now();
+let illegal = 0, moves = 0;
 for (let y = 1; y <= N; y++) {
   const L = s.league.players;
   const vals = L.map(playerValue).sort((a, b) => b - a);
+  // roster legality, checked every 20 days through the year
+  for (; s.day < s.regularDays; simDays(s, 20)) for (const t of s.league.teams) {
+    const act = activeOf(t), arms = act.filter((id) => s.players.get(id)?.position === 'P').length;
+    if (t.playerIds.length > RULES.forty || act.length !== RULES.active || arms !== RULES.pitchers || !act.every((id) => t.playerIds.includes(id))) illegal++;
+  }
   simToEnd(s);
+  moves += s.league.teams.reduce((n, t) => n + (t.moves?.count ?? 0), 0);
   const l = line(s);
   const champ = s.post?.champion ?? 0;
   const { season, report } = y < N ? nextSeason(s) : { season: s, report: null };
@@ -39,4 +47,4 @@ for (let y = 1; y <= N; y++) {
     `${l.AVG.toFixed(3)}  ${f(l.HR600).padStart(5)}  ${f(100 * l.K)}  ${f(100 * l.BB, 1).padStart(4)}  ${f(l.RG, 2)}  |  ${String(report?.retirements.length ?? '').padStart(4)}  ${String(report?.signings.length ?? '').padStart(4)}  ${String(s.league.freeAgents.length).padStart(4)}  ${champ}`);
   s = season;
 }
-console.log(`\n${N} years in ${f((performance.now() - t0) / 1000)} s`);
+console.log(`\n${N} years in ${f((performance.now() - t0) / 1000)} s · illegal rosters seen: ${illegal} · AI moves in the last month of each year: ${moves}`);

@@ -4,6 +4,7 @@
  */
 import type { PitchDetail } from '../engine/game/text';
 import { regularOver } from '../engine/season/season';
+import { release, signFreeAgent, swap, toggleClaim, type MoveError } from '../engine/roster';
 import { lightingAt, type Lighting } from '../engine/season/schedule';
 import type { League } from '../engine/types';
 import { generateLeague } from '../engine/generate';
@@ -26,6 +27,18 @@ export interface Watch { replay: Replay; at: number; auto: boolean; index: numbe
 const SETTINGS_KEY = 'baseball-gods/settings';
 const tick = () => new Promise<void>((r) => setTimeout(r, 0));
 
+const MOVE_ERRORS: Record<MoveError, string> = {
+  'no-moves': 'No moves left this month', 'not-reserve': 'He isn\'t on your reserves', 'not-active': 'He isn\'t on your active 26',
+  'different-group': 'Call up a pitcher for a pitcher, a bat for a bat', 'full-40': 'Your 40-man roster is full',
+  'not-free-agent': 'He isn\'t a free agent anymore', 'on-waivers': 'He\'s on waivers',
+};
+/** After a call-up: where the man sent down went. */
+function canOptionLabel(g: Game, downId: number): string {
+  const p = g.players.get(downId);
+  if (!p) return 'Done';
+  return g.league.waivers.some((w) => w.playerId === downId) ? `${p.name} is out of options: on waivers for 3 days` : `${p.name} optioned to the reserves`;
+}
+
 export class App {
   screen: Screen = 'title';
   titleStage: 'press' | 'menu' = 'press';
@@ -45,6 +58,9 @@ export class App {
   gamesPick = -1;
   logPick = -1;
   rosterTeam = 0;
+  rosterTab: 'lineup' | 'staff' | 'moves' = 'lineup';
+  /** A player whose RELEASE was pressed once (the second press confirms). */
+  releaseArmed = 0;
   busy: Busy | null = null;
   toast = '';
   passwordMsg = '';
@@ -435,6 +451,21 @@ export class App {
     const el = e.target as HTMLInputElement | HTMLSelectElement;
     const act = el.dataset.act;
     if (!act) return;
+    if (this.game && (act === 'lineup-pos' || act === 'lineup-sub' || act === 'rot-swap' || act === 'pen-role' || act === 'call-up')) {
+      const g = this.game, i = Number(el.dataset.i), v = el.value;
+      if (!v) return;
+      if (act === 'lineup-pos') g.lineupPos(i, Number(v));
+      else if (act === 'lineup-sub') g.lineupSub(i, Number(v));
+      else if (act === 'rot-swap') g.rotationSwap(i, Number(v));
+      else if (act === 'pen-role') g.penRole(i, v as 'CL' | 'SU' | 'MR' | 'LR');
+      else {
+        const err = swap(g.season, g.userTeam, Number(el.dataset.id), Number(v));
+        if (err) this.showToast(MOVE_ERRORS[err]);
+        else this.showToast(canOptionLabel(g, Number(v)));
+      }
+      this.persist(); this.render();
+      return;
+    }
     if (act === 'load-file') { const f = (el as HTMLInputElement).files?.[0]; (el as HTMLInputElement).value = ''; if (f) void this.loadFile(f); }
     else if (act === 'roster-team') { this.rosterTeam = Number(el.value); this.render(); }
     else if (act === 'set-readable') { this.settings.readable = (el as HTMLInputElement).checked; document.documentElement.classList.toggle('readable', this.settings.readable); this.saveSettings(); this.parkKey = ''; this.render(); }
@@ -575,6 +606,33 @@ export class App {
       case 'games-pick': this.gamesPick = Number(d.index); this.render(); return;
       case 'log-pick': this.logPick = Number(d.index); this.render(); return;
       case 'news': if (g) { this.screen = 'news'; this.render(); } return;
+      case 'roster-tab': this.rosterTab = d.tab as App['rosterTab']; this.releaseArmed = 0; this.render(); return;
+      case 'roster-auto': {
+        if (!g) return;
+        const part = d.part as 'lineup' | 'staff' | 'roster';
+        g.setAuto(part, !g.team.auto![part]);
+        this.persist(); this.render();
+        return;
+      }
+      case 'lineup-move': if (g) { g.lineupMove(Number(d.i), Number(d.dir)); this.persist(); this.render(); } return;
+      case 'rot-move': if (g) { g.rotationMove(Number(d.i), Number(d.dir)); this.persist(); this.render(); } return;
+      case 'release-arm': this.releaseArmed = Number(d.id); this.render(); return;
+      case 'release': {
+        if (!g) return;
+        const err = release(g.season, g.userTeam, Number(d.id));
+        this.releaseArmed = 0;
+        this.showToast(err ? MOVE_ERRORS[err] : 'Released: on waivers for 3 days');
+        this.persist(); this.render();
+        return;
+      }
+      case 'claim': if (g) { toggleClaim(g.league, g.userTeam, Number(d.id)); this.persist(); this.render(); } return;
+      case 'sign': {
+        if (!g) return;
+        const err = signFreeAgent(g.season, g.userTeam, Number(d.id));
+        this.showToast(err ? MOVE_ERRORS[err] : 'Signed to your reserves');
+        this.persist(); this.render();
+        return;
+      }
       case 'to-offseason': {
         if (!g || !g.over || this.busy) return;
         await this.withBusy('The winter: aging, retirements, signings', 1, false, async () => { await tick(); g.startNextYear(); });

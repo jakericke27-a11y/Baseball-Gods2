@@ -23,6 +23,13 @@ export interface ScheduledGame {
 export type Lighting = 'day' | 'dusk' | 'night';
 /** Day 0 of a year is a Thursday (a classic Opening Day). 0 = Sunday ... 6 = Saturday. */
 export const weekdayOf = (day: number): number => (day + 4) % 7;
+const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+/** Calendar month (0 = January) and date of a season day; day 0 is March 26. */
+export function dateOfDay(day: number): { month: number; date: number } {
+  let month = 2, date = 26 + day;
+  while (date > MONTH_DAYS[month]) { date -= MONTH_DAYS[month]; month = (month + 1) % 12; }
+  return { month, date };
+}
 export const formatStart = (m: number): string =>
   `${((Math.floor(m / 60) + 11) % 12) + 1}:${String(m % 60).padStart(2, '0')} ${m >= 720 ? 'PM' : 'AM'}`;
 /** Light at a given inning: about 20 minutes per inning after first pitch. */

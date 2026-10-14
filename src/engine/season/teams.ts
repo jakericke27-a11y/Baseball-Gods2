@@ -4,7 +4,7 @@
  * 26 active = 13 position players' worth of lineup/bench + 13 pitchers (rotation + bullpen).
  */
 import type { BullpenArm, LineupSlot } from '../game/types';
-import type { League, Player, TeamStrategy } from '../types';
+import type { League, Player, Team, TeamStrategy } from '../types';
 
 export interface TeamPlan {
   teamId: number;
@@ -22,11 +22,28 @@ const onBase = (p: Player) => p.ratings.contact + p.ratings.discipline + 0.3 * p
 const pitchScore = (p: Player) => p.ratings.velocity + p.ratings.control + p.ratings.movement;
 const STAFF_SIZE = 13;
 
+/** Plans for every team, from each team's active 26 (or its whole roster before there is one). */
 export function buildTeamPlans(league: League): Map<number, TeamPlan> {
   const players = new Map(league.players.map((p) => [p.id, p]));
   const plans = new Map<number, TeamPlan>();
-  for (const t of league.teams) {
-    const roster = t.playerIds.map((id) => players.get(id)!);
+  for (const t of league.teams) plans.set(t.id, planFor(t, (t.active ?? t.playerIds).map((id) => players.get(id)!)));
+  return plans;
+}
+
+/** The AI's 26 from a 40: exactly the lineup and staff its plan would use, plus the four best other bats. */
+export function pickActive(t: Team, roster: Player[]): number[] {
+  const plan = planFor(t, roster);
+  const used = new Set([...plan.lineup.map((s) => s.player.id), ...plan.rotation.map((p) => p.id), ...plan.bullpen.map((a) => a.player.id)]);
+  const bench = roster.filter((p) => p.position !== 'P' && !used.has(p.id)).sort((a, b) => batScore(b) - batScore(a) || a.id - b.id).slice(0, BENCH);
+  return [...used, ...bench.map((p) => p.id)];
+}
+const BENCH = 4;
+
+/** A game plan from the players given: lineup, rotation and bullpen. */
+export { batScore, pitchScore };
+
+export function planFor(t: Team, roster: Player[]): TeamPlan {
+  {
 
     // Lineup: best bat at each position, best remaining bat at DH.
     const hitters = roster.filter((p) => p.position !== 'P');
@@ -73,7 +90,6 @@ export function buildTeamPlans(league: League): Map<number, TeamPlan> {
       ...long.map((player) => ({ player, role: 'LR' as const })),
       ...others.filter((p) => !setup.includes(p) && !long.includes(p)).map((player) => ({ player, role: 'MR' as const })),
     ];
-    plans.set(t.id, { teamId: t.id, lineup, rotation, bullpen, strategy: t.strategy });
+    return { teamId: t.id, lineup, rotation, bullpen, strategy: t.strategy };
   }
-  return plans;
 }

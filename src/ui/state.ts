@@ -7,8 +7,9 @@ import { DEFAULT_PARAMS } from '../engine/atbat/params';
 import { applyEnvironment, type LeagueEnvironment } from '../engine/atbat/environment';
 import { generateLeague } from '../engine/generate';
 import { ordinal } from '../engine/game/text';
-import { Moment, type GameResult } from '../engine/game/types';
+import { Moment, type BullpenRole, type GameResult } from '../engine/game/types';
 import { nextSeason, type OffseasonReport } from '../engine/offseason';
+import { refreshPlan } from '../engine/roster';
 import { createSeason, isOver, simDay, type Season } from '../engine/season/season';
 import type { League, Player } from '../engine/types';
 import { postHeadlines } from './post';
@@ -38,11 +39,15 @@ export class Game {
   constructor(seed: number, userTeam: number, league?: League, season?: Season) {
     this.seed = seed;
     this.userTeam = userTeam;
-    this.bind(season ?? createSeason(league ?? generateLeague(seed), PARAMS, { year: 1, seed, logs: true, postseason: true }));
+    this.bind(season ?? createSeason(league ?? generateLeague(seed), PARAMS, { year: 1, seed, logs: true, postseason: true, rosterRules: true, userTeam }));
   }
 
   private bind(season: Season): void {
     this.season = season;
+    season.rosterRules = true;
+    season.userTeam = this.userTeam;
+    const mine = season.league.teams.find((t) => t.id === this.userTeam);
+    if (mine && !mine.auto) mine.auto = { lineup: true, staff: true, roster: true };
     this.league = season.league;
     this.players = season.players;
     this.teamOf = new Map();
@@ -52,6 +57,59 @@ export class Game {
   }
 
   get year() { return this.season.year; }
+  get team() { return this.league.teams.find((t) => t.id === this.userTeam)!; }
+  get plan() { return this.season.plans.get(this.userTeam)!; }
+
+  // ---------------------------------------------------------------- your roster (roster.ts has the rules)
+
+  /** Hand a part back to the AI (rebuilt now), or take it over. */
+  setAuto(part: 'lineup' | 'staff' | 'roster', on: boolean): void {
+    this.team.auto![part] = on;
+    if (on && part !== 'roster') refreshPlan(this.season, this.team);
+  }
+  private byHand(part: 'lineup' | 'staff') { this.team.auto![part] = false; }
+  lineupMove(i: number, dir: number): void {
+    const L = this.plan.lineup, j = i + dir;
+    if (j < 0 || j >= L.length) return;
+    [L[i], L[j]] = [L[j], L[i]];
+    this.byHand('lineup');
+  }
+  /** Give slot i a position; whoever had it takes slot i's old one. */
+  lineupPos(i: number, pos: number): void {
+    const L = this.plan.lineup, k = L.findIndex((l) => l.pos === pos);
+    if (k >= 0) L[k] = { ...L[k], pos: L[i].pos };
+    L[i] = { ...L[i], pos };
+    this.byHand('lineup');
+  }
+  /** Put an active bench player into slot i (same position, same spot in the order). */
+  lineupSub(i: number, playerId: number): void {
+    const p = this.players.get(playerId);
+    if (!p || this.plan.lineup.some((l) => l.player.id === playerId)) return;
+    this.plan.lineup[i] = { player: p, pos: this.plan.lineup[i].pos };
+    this.byHand('lineup');
+  }
+  rotationMove(i: number, dir: number): void {
+    const R = this.plan.rotation, j = i + dir;
+    if (j < 0 || j >= R.length) return;
+    [R[i], R[j]] = [R[j], R[i]];
+    this.byHand('staff');
+  }
+  /** Swap a starter with a bullpen arm: the reliever takes his rotation spot, the starter his bullpen role. */
+  rotationSwap(i: number, playerId: number): void {
+    const pen = this.plan.bullpen, k = pen.findIndex((a) => a.player.id === playerId);
+    if (k < 0) return;
+    const starter = this.plan.rotation[i];
+    this.plan.rotation[i] = pen[k].player;
+    pen[k] = { player: starter, role: pen[k].role };
+    this.byHand('staff');
+  }
+  /** A bullpen role. Naming a new closer moves the old one to setup. */
+  penRole(i: number, role: BullpenRole): void {
+    const pen = this.plan.bullpen;
+    if (role === 'CL') pen.forEach((a, k) => { if (a.role === 'CL' && k !== i) pen[k] = { ...a, role: 'SU' }; });
+    pen[i] = { ...pen[i], role };
+    this.byHand('staff');
+  }
 
   /** After the final: the winter (aging, retirements, signings), then Opening Day of the next year. */
   startNextYear(): OffseasonReport {

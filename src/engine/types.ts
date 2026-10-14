@@ -40,6 +40,9 @@ export interface Player {
   abilities?: { bounceBack?: number };
   /** Hidden development (offseason.ts). Never shown: scouting and stats are how you learn it. */
   dev?: PlayerDev;
+  /** Option years left (4 to start); one is used in any season he's sent to the reserves. */
+  options?: number;
+  optionedThisYear?: boolean;
 }
 
 export type RatingKey = Exclude<keyof Ratings, 'clutchRisp' | 'clutchPressure'>;
@@ -63,6 +66,12 @@ export interface Team {
   division: number;
   playerIds: number[];
   strategy: TeamStrategy;
+  /** The active 26 (roster.ts): 13 position players and 13 pitchers. The rest of the 40 are reserves. */
+  active?: number[];
+  /** Roster moves this calendar month (call-up + send-down swaps), for the monthly cap. */
+  moves?: { month: number; count: number };
+  /** Your team only: which parts the AI runs. Editing one turns its AUTO off. */
+  auto?: { lineup: boolean; staff: boolean; roster: boolean };
 }
 
 export interface TeamStrategy {
@@ -86,4 +95,19 @@ export interface League {
   nextId: number;
   /** One summary per finished season (history.ts). */
   history: YearSummary[];
+  /** Players on waivers (roster.ts). */
+  waivers: Waiver[];
+}
+
+export interface Waiver {
+  playerId: number;
+  fromTeam: number;
+  /** Clears at the start of this day. */
+  until: number;
+  /** 'outright': out of options, sent down (clears back to his team's reserves). 'release': clears to free agency. */
+  kind: 'outright' | 'release';
+  /** Teams that put in a claim; the worst record among them gets him. */
+  claims: number[];
+  /** A released player belongs to nobody while he waits, so he's kept here. */
+  player?: Player;
 }

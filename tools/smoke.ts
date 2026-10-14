@@ -150,6 +150,19 @@ async function main() {
   ok(app().game.league.teams.every((t: any) => t.playerIds.length === 40), 'every team has a full 40-man roster');
   await click('[data-act="news"]');
   ok(doc.querySelector('[data-to="offseason"]'), 'the headlines screen links back to the winter report');
+  // Roster management: tabs, a lineup change, a call-up
+  await click('.nav [data-act="go"][data-to="roster"]');
+  ok(doc.querySelectorAll('.tab').length === 3, 'your roster has three tabs');
+  const first = app().game.plan.lineup[0].player.id;
+  await click('[data-act="lineup-move"][data-i="0"][data-dir="1"]');
+  ok(app().game.plan.lineup[1].player.id === first && app().game.team.auto.lineup === false, 'the arrows reorder your lineup and take it off AUTO');
+  await click('[data-act="roster-tab"][data-tab="moves"]');
+  const callUp = q('select[data-act="call-up"]') as HTMLSelectElement;
+  const upId = Number(callUp.dataset.id); callUp.value = callUp.options[1].value;
+  callUp.dispatchEvent(new w.Event('change', { bubbles: true })); await settle();
+  ok(app().game.team.active.includes(upId), 'a call-up from the reserves');
+  await click('[data-act="roster-tab"][data-tab="staff"]');
+  ok(doc.querySelectorAll('select[data-act="pen-role"]').length === app().game.plan.bullpen.length, 'the pitching tab sets bullpen roles');
   // History: a veteran's card shows his Year 1 line, this year's, and a career total; Standings list past seasons.
   const vet = app().game.league.players.find((p: any) => p.position !== 'P' && app().game.league.history[0].batting.some((r: number[]) => r[0] === p.id) && app().game.season.batting.get(p.id))!;
   await app().act('player', { id: String(vet.id) }); await settle();

@@ -8,6 +8,7 @@
  */
 import type { AtBatParams } from './atbat/params';
 import { seedPipeline } from './generate';
+import { setAllActive } from './roster';
 import type { BatLine, BullpenRole, GameMoment, GameResult, PitchLine } from './game/types';
 import { createRng, type RngState } from './rng';
 import type { Postseason } from './season/postseason';
@@ -16,7 +17,7 @@ import type { Season, StandingRow } from './season/season';
 import type { TeamPlan } from './season/teams';
 import type { League, TeamStrategy } from './types';
 
-export const SNAPSHOT_VERSION = 4;
+export const SNAPSHOT_VERSION = 5;
 
 type Entries<V> = Array<[number, V]>;
 
@@ -58,6 +59,9 @@ export interface SeasonSnap {
   post: Postseason | null;
   postBatting: Entries<BatLine>;
   postPitching: Entries<PitchLine>;
+  // v5: roster rules
+  rosterRules: boolean;
+  userTeam: number;
 }
 
 const ents = <V>(m: Map<number, V>): Entries<V> => [...m];
@@ -87,6 +91,7 @@ export function snapshotSeason(s: Season): { data: SeasonSnap; logs: Uint8Array[
     rotationNext: ents(s.rotationNext), lastGameDay: ents(s.lastGameDay), lastStartDay: ents(s.lastStartDay), fatigue: ents(s.fatigue),
     standings: [...s.standings.values()], batting: ents(s.batting), pitching: ents(s.pitching), results, keepLogs: s.keepLogs,
     regularDays: s.regularDays, postseason: s.postseason, post: s.post, postBatting: ents(s.postBatting), postPitching: ents(s.postPitching),
+    rosterRules: s.rosterRules, userTeam: s.userTeam,
   };
   // A deep copy, so the snapshot never shares objects with the live season.
   return { data: clone(data), logs: logs.map((l) => l.slice()) };
@@ -106,6 +111,13 @@ const UPGRADES: Record<number, (s: SeasonSnap) => SeasonSnap> = {
   },
   // v3 → v4: history.
   3: (s) => { const L = s.league as Partial<League> & League; L.history ??= []; return { ...s, v: 4 }; },
+  // v4 → v5: roster rules. Each team's 26 is what its plan already used, so the season plays on unchanged.
+  4: (s) => {
+    const L = s.league as Partial<League> & League;
+    L.waivers ??= [];
+    setAllActive(L);
+    return { ...s, v: 5, rosterRules: true, userTeam: 0 };
+  },
 };
 
 export function upgradeSnapshot(s: SeasonSnap): SeasonSnap {
@@ -145,5 +157,6 @@ export function restoreSeason(snap: SeasonSnap, logs: Uint8Array[]): Season {
     fatigue: new Map(d.fatigue), standings: new Map(d.standings.map((r) => [r.teamId, r])),
     batting: new Map(d.batting), pitching: new Map(d.pitching), results, keepLogs: d.keepLogs,
     regularDays: d.regularDays, postseason: d.postseason, post: d.post, postBatting: new Map(d.postBatting), postPitching: new Map(d.postPitching),
+    rosterRules: d.rosterRules, userTeam: d.userTeam,
   };
 }

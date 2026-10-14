@@ -18,6 +18,7 @@ import { simulateGame } from '../game/game';
 import { newBatLine, newPitchLine, type BatLine, type GameResult, type PitchLine, type TeamGameSetup } from '../game/types';
 import { createRng, type Rng } from '../rng';
 import type { League, Player } from '../types';
+import { rosterMorning } from '../roster';
 import { postseasonAfterDay, type Postseason } from './postseason';
 import { buildSchedule, type Schedule } from './schedule';
 import { buildTeamPlans, type TeamPlan } from './teams';
@@ -69,10 +70,14 @@ export interface Season {
   /** Postseason stats, kept apart from the regular season's (Game 163s count as regular season). */
   postBatting: Map<number, BatLine>;
   postPitching: Map<number, PitchLine>;
+  /** Roster rules run each morning (waivers, weekly AI moves): the game does; tools don't. */
+  rosterRules: boolean;
+  /** Your team (0: none), whose AUTO switches the AI respects. */
+  userTeam: number;
 }
 
 export function createSeason(
-  league: League, params: AtBatParams, opts: { year: number; seed: number; logs?: boolean; schedule?: Schedule; postseason?: boolean },
+  league: League, params: AtBatParams, opts: { year: number; seed: number; logs?: boolean; schedule?: Schedule; postseason?: boolean; rosterRules?: boolean; userTeam?: number },
 ): Season {
   const standings = new Map<number, StandingRow>();
   for (const t of league.teams) {
@@ -85,6 +90,7 @@ export function createSeason(
     plans: buildTeamPlans(league), rotationNext: new Map(), lastGameDay: new Map(), lastStartDay: new Map(), fatigue: new Map(),
     standings, batting: new Map(), pitching: new Map(), results: [], keepLogs: !!opts.logs,
     regularDays: schedule.days, postseason: !!opts.postseason, post: null, postBatting: new Map(), postPitching: new Map(),
+    rosterRules: !!opts.rosterRules, userTeam: opts.userTeam ?? 0,
   };
 }
 
@@ -97,6 +103,7 @@ export const inPostseason = (s: Season) => s.post?.phase === 'post';
 /** Simulate one calendar day (may be an off day for everyone). */
 export function simDay(s: Season): GameResult[] {
   if (isOver(s)) return [];
+  if (s.rosterRules) rosterMorning(s, s.userTeam);
   for (const [id, f] of s.fatigue) {
     if (f <= 0) continue;
     const bonus = s.players.get(id)?.abilities?.bounceBack ?? 0;

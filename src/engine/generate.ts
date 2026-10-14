@@ -5,6 +5,7 @@
  */
 import { expectedGap, RATING_KEYS, rollDev } from './development';
 import { createRng, type Rng } from './rng';
+import { setAllActive } from './roster';
 import { REGIONS, type Region, type TendencyKey } from './regions';
 import type { Bats, League, Player, PitcherRole, Position, RatingKey, Ratings, Team, Throws } from './types';
 
@@ -126,8 +127,9 @@ export function generateLeague(seed: number): League {
     }
     teams.push(team);
   }
-  const league: League = { seed, players, teams, amateurs: [], freeAgents: [], retired: [], nextId, history: [] };
+  const league: League = { seed, players, teams, amateurs: [], freeAgents: [], retired: [], nextId, history: [], waivers: [] };
   seedPipeline(league);
+  setAllActive(league);
   return league;
 }
 

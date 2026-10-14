@@ -10,6 +10,7 @@
 import { develop, playerValue, roleFor } from './development';
 import { PIPELINE, rollAmateur } from './generate';
 import { summarizeSeason } from './history';
+import { refreshPlan, rosterWinter, setAllActive } from './roster';
 import type { Rng } from './rng';
 import { createSeason, type Season } from './season/season';
 import type { League, Player, Position, Team } from './types';
@@ -145,8 +146,16 @@ export const yearSeed = (leagueSeed: number, year: number) => (Math.imul(leagueS
 /** The winter after a season, and the new season it leads to. The old season is used up (its league moves on). */
 export function nextSeason(prev: Season): { season: Season; report: OffseasonReport } {
   prev.league.history.push(summarizeSeason(prev));
+  rosterWinter(prev.league);
   const report = runOffseason(prev.league, prev.year, prev.rng, worstFirst(prev));
+  setAllActive(prev.league);
   const year = prev.year + 1;
-  const season = createSeason(prev.league, prev.params, { year, seed: yearSeed(prev.league.seed, year), logs: prev.keepLogs, postseason: prev.postseason });
+  const season = createSeason(prev.league, prev.params, {
+    year, seed: yearSeed(prev.league.seed, year), logs: prev.keepLogs, postseason: prev.postseason, rosterRules: prev.rosterRules, userTeam: prev.userTeam,
+  });
+  // Your hand-set lineup and staff carry into the new year (repaired for whoever left).
+  const mine = season.league.teams.find((t) => t.id === prev.userTeam);
+  const old = prev.plans.get(prev.userTeam);
+  if (mine && old && mine.auto && (!mine.auto.lineup || !mine.auto.staff)) { season.plans.set(mine.id, old); refreshPlan(season, mine); }
   return { season, report };
 }

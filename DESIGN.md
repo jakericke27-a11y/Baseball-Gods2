@@ -106,6 +106,20 @@ sac flies, steals, wild pitches/passed balls, errors (glove), extra innings, wal
   spread settling from 5.3 to ~4.3 as teams replace Year 1's random scrubs) and the league line (AVG .256–.266,
   ~10 R/G) holding over 20 years.
 
+## Roster rules (`engine/roster.ts`)
+- The 40 = an active 26 (13 position players, 13 pitchers) + 14 reserves (the minors' replacement; they don't
+  play). Season plans come from the 26. The AI's 26 is the lineup and staff its plan already used plus the four
+  best other bats, so Year 1 games are what they were before the 26 existed.
+- A move is a swap, same group: a reserve called up for an active player sent down. Six per calendar month.
+- Options: four option years; one is used in any season a player is sent down (spent over the winter). Out of
+  options, a send-down goes through outright waivers. Waivers last three days; the worst-record claimant wins
+  (a full 40 drops its worst reserve to make room). A released player clears to free agency. Free agents sign
+  whenever a 40 has room (Year 1 has none until the founding draft, 1.6).
+- AI teams adjust once a week (one swap per group if a reserve is clearly better, a bigger margin when it costs
+  waivers) and claim clearly better players; never during October. Your team: AUTO for the lineup, the pitching
+  staff and the roster; editing one turns it off, and your hand-set parts are repaired, not replaced, when
+  players leave (also across winters). `npm run years -- 20` counts illegal rosters every 20 days: zero.
+
 ## History (`engine/history.ts`)
 Each finished season is boiled down to a summary in `league.history`: every player's regular-season and postseason
 lines as compact rows, every team's record, division place and seed, the bracket and champion, and a ratings
@@ -190,6 +204,9 @@ New-engine guards: runs vs BaseRuns check, RBI ≤ R, per-team start limits by r
   state). The Year 1 password stops being offered from Year 2 on (it can only replay Year 1); files carry later years.
 - 2026-10-14 — History (step 1.4): season summaries, careers on the player card, past seasons on Standings,
   one ratings snapshot per season. Draft results join the summary with the draft (1.6).
+- 2026-10-14 — Roster rules (step 1.5): 26 + 14 reserves, swaps capped at 6 a month, four option years, 3-day
+  waivers, weekly AI moves, the Roster screen's Lineup / Pitching / 26 & Reserves tabs with AUTO switches.
+  Arbitration after two years and free agency after four (open question 2) are confirmed for 4.3.
 
 ## Design philosophy (2026-10-03)
 Realistic baseline; the fun is in finding combinations that BREAK it (ratings + abilities + favor +
