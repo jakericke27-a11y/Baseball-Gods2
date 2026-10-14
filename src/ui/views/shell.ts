@@ -92,7 +92,7 @@ function playerCard(app: App, id: number): string {
   const body = `<p class="pc-line">${esc(role)} · bats ${p.bats}, throws ${p.throws} · age ${p.age} · ${esc(teamName(teamId))}</p>
 <p class="pc-line muted">Born in ${esc(region?.name ?? 'parts unknown')}${region ? ` (${esc(region.environment.replace(/_/g, ' '))})` : ''}</p>
 <div class="rgrid">${isP ? arm + field + clutch : hit + field + clutch}</div>
-<h3 class="pc-h">YEAR 1</h3><p class="pc-line">${line}</p>${postLine(g, id, isP)}<p class="pc-line muted small">Ratings show to the nearest 5 on the 20–80 scouting scale.</p>`;
+<h3 class="pc-h">YEAR ${g.year}</h3><p class="pc-line">${line}</p>${postLine(g, id, isP)}<p class="pc-line muted small">Ratings show to the nearest 5 on the 20–80 scouting scale.</p>`;
   return modal('pc-t', esc(p.name), body);
 }
 
@@ -135,7 +135,7 @@ function saveNote(app: App): string {
   switch (app.storage) {
     case 'persistent': return 'This browser saves your league automatically, and it has agreed to keep it.';
     case 'kept': return 'This browser saves your league automatically. Browsers can clear saved data for sites you haven\'t visited in a while (Safari after about a week), so keep a file too.';
-    case 'none': return 'This browser won\'t store the full league here (a private window, or storage is off). It keeps a short replay save instead, and the year replays from it when you continue. Save a file to keep everything.';
+    case 'none': return app.game?.year === 1 ? 'This browser won\'t store the full league here (a private window, or storage is off). It keeps a short replay save instead, and the year replays from it when you continue. Save a file to keep everything.' : 'This browser won\'t store the league here (a private window, or storage is off). Save a file, or this league is gone when the page closes.';
     default: return 'This browser saves your league automatically.';
   }
 }

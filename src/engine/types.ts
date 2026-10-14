@@ -36,7 +36,23 @@ export interface Player {
   ratings: Ratings;
   /** Special abilities (innate or Gods-given). Hook for the outlier layer; empty for now. */
   abilities?: { bounceBack?: number };
+  /** Hidden development (offseason.ts). Never shown: scouting and stats are how you learn it. */
+  dev?: PlayerDev;
 }
+
+export type RatingKey = Exclude<keyof Ratings, 'clutchRisp' | 'clutchPressure'>;
+
+export interface PlayerDev {
+  /** The ceiling each rating grows toward while young. */
+  potential: Record<RatingKey, number>;
+  /** How fully he grows into it: 1 is typical, under 0.7 a likely bust, over 1.3 a late bloomer. */
+  growth: number;
+  /** How hard age hits him: 1 is typical, under 0.7 ages gracefully. */
+  aging: number;
+}
+
+/** A player who left the game, kept for history. */
+export interface RetiredPlayer extends Player { retiredAfter: number; lastTeam: number }
 
 export interface Team {
   id: number;
@@ -56,6 +72,14 @@ export interface TeamStrategy {
 
 export interface League {
   seed: number;
+  /** Everyone on a 40-man roster. */
   players: Player[];
   teams: Team[];
+  /** Amateurs aged 16–22, growing up in view; drafted (later) or signable once they turn 23. */
+  amateurs: Player[];
+  /** Unsigned players any team can sign: undrafted amateurs 23 and up, and released players. */
+  freeAgents: Player[];
+  retired: RetiredPlayer[];
+  /** Next unused player id. */
+  nextId: number;
 }

@@ -1433,7 +1433,8 @@ function renderArtPanel() {
 const SCENES = {
   clock() {
     const g = game();
-    if (!g || g.over) return say('Clock', ['The season is over. The clock keeps ticking anyway.']);
+    if (!g) return say('Clock', ['The clock keeps ticking.']);
+    if (g.over) return say('Clock', ['The year is over. Winter is coming: players age, some retire, teams sign replacements.'], [{ label: 'ON TO NEXT YEAR', run: () => gameAct('to-offseason') }, { label: 'NOT YET' }]);
     const lines = [`It is ${bannerDate()}.`, todayGame() ? 'You play today. Simming plays the game without you. How far ahead?' : 'How far ahead?'];
     say('Clock', lines, [
       { label: 'A DAY', run: () => gameAct('sim-day') }, { label: 'A WEEK', run: () => gameAct('sim-week') },

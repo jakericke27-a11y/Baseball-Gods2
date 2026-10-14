@@ -7,6 +7,7 @@
  * Bump SNAPSHOT_VERSION when the shape changes, and add an upgrade step in UPGRADES.
  */
 import type { AtBatParams } from './atbat/params';
+import { seedPipeline } from './generate';
 import type { BatLine, BullpenRole, GameMoment, GameResult, PitchLine } from './game/types';
 import { createRng, type RngState } from './rng';
 import type { Postseason } from './season/postseason';
@@ -15,7 +16,7 @@ import type { Season, StandingRow } from './season/season';
 import type { TeamPlan } from './season/teams';
 import type { League, TeamStrategy } from './types';
 
-export const SNAPSHOT_VERSION = 2;
+export const SNAPSHOT_VERSION = 3;
 
 type Entries<V> = Array<[number, V]>;
 
@@ -95,6 +96,14 @@ export function snapshotSeason(s: Season): { data: SeasonSnap; logs: Uint8Array[
 const UPGRADES: Record<number, (s: SeasonSnap) => SeasonSnap> = {
   // v1 → v2: the postseason. Only the game wrote v1 saves, and the game plays the postseason.
   1: (s) => ({ ...s, v: 2, regularDays: s.schedule.days, postseason: true, post: null, postBatting: [], postPitching: [] }),
+  // v2 → v3: hidden development and the amateur pipeline (deterministic from the league's seed).
+  2: (s) => {
+    const L = s.league as Partial<League> & League;
+    L.amateurs ??= []; L.freeAgents ??= []; L.retired ??= [];
+    L.nextId ??= L.players.reduce((m, p) => Math.max(m, p.id), 0) + 1;
+    seedPipeline(L);
+    return { ...s, v: 3 };
+  },
 };
 
 export function upgradeSnapshot(s: SeasonSnap): SeasonSnap {

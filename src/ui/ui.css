@@ -424,3 +424,10 @@ input[type="file"] { font: var(--d-s)/1.2 var(--f-data); }
 .br-champ { margin: 0 0 12px; font: var(--d-m)/1.2 var(--f-data); color: var(--gold); }
 @media (max-width: 900px) { .bracket { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .bracket { grid-template-columns: 1fr; } }
+
+/* The offseason report */
+.off-cards { align-items: start; }
+.lead-list.off-list li { grid-template-columns: minmax(0, 1fr) auto; font: var(--d-s)/1.25 var(--f-data); }
+.off-list .val { min-width: 4ch; text-align: right; }
+.off-list .nm .muted { display: block; font-size: var(--l-xs); }
+.news-actions { margin: 0 0 16px; }

@@ -3,12 +3,15 @@
  *   30 teams (2 conferences × 3 divisions × 5), 40-man rosters (22 hitters + 18 pitchers),
  *   attributes = region tendency + Normal(0, stdev), clamped to 20–80.
  */
+import { expectedGap, RATING_KEYS, rollDev } from './development';
 import { createRng, type Rng } from './rng';
 import { REGIONS, type Region, type TendencyKey } from './regions';
-import type { Bats, League, Player, PitcherRole, Position, Ratings, Team, Throws } from './types';
+import type { Bats, League, Player, PitcherRole, Position, RatingKey, Ratings, Team, Throws } from './types';
 
+/** Ages on a Year 1 roster, shaped like a settled league (about 28.5 on average, few under 23). Only the ages
+ *  changed from the first build: the draws happen in the same order, so every rating is what it was. */
 const AGE_BANDS: Array<[number, number, number]> = [
-  [18, 21, 0.20], [22, 25, 0.30], [26, 29, 0.25], [30, 33, 0.15], [34, 37, 0.08], [38, 42, 0.02],
+  [21, 23, 0.10], [24, 26, 0.25], [27, 29, 0.27], [30, 32, 0.20], [33, 35, 0.12], [36, 40, 0.06],
 ];
 
 const HITTER_SLOTS: Position[] = [
@@ -53,7 +56,7 @@ function rollName(rng: Rng): string {
   return `${first} ${last}`;
 }
 
-function rollPlayer(rng: Rng, id: number, position: Position, role?: PitcherRole): Player {
+export function rollPlayer(rng: Rng, id: number, position: Position, role?: PitcherRole): Player {
   const region = pickWeighted(rng, REGIONS, (r) => r.spawnWeight);
   const a = (k: TendencyKey) => rollAttr(rng, region, k);
   const ratings: Ratings = {
@@ -123,5 +126,47 @@ export function generateLeague(seed: number): League {
     }
     teams.push(team);
   }
-  return { seed, players, teams };
+  const league: League = { seed, players, teams, amateurs: [], freeAgents: [], retired: [], nextId };
+  seedPipeline(league);
+  return league;
+}
+
+// ---------------------------------------------------------------- the amateur pipeline
+
+export const PIPELINE = {
+  /** New 16-year-olds each year, across the regions. */
+  classSize: 150,
+  /** Amateur potentials sit this far above a league roll (the pool is the raw material; teams sign the best). */
+  lift: 0,
+  firstAge: 16,
+  /** Signable by anyone from this age (no draft yet: 1.6 adds it at 18–22). */
+  signAge: 23,
+};
+
+const AMATEUR_POSITIONS: Position[] = [...HITTER_SLOTS, ...EXTRA_HITTERS];
+
+/** A new amateur at an age: rolled like a league player, but those rolls are his potential, and he grows into them. */
+export function rollAmateur(rng: Rng, id: number, age: number): Player {
+  const pitcher = rng.next() < 0.45;
+  const position = pitcher ? 'P' : AMATEUR_POSITIONS[rng.int(AMATEUR_POSITIONS.length)];
+  const role: PitcherRole | undefined = pitcher ? (rng.next() < 0.4 ? 'SP' : 'RP') : undefined;
+  const p = rollPlayer(rng, id, position, role);
+  p.age = age;
+  const potential = {} as Record<RatingKey, number>;
+  for (const k of RATING_KEYS) potential[k] = Math.max(20, Math.min(80, p.ratings[k] + PIPELINE.lift));
+  p.dev = rollDev(rng, p, potential);
+  for (const k of RATING_KEYS) p.ratings[k] = Math.max(20, Math.min(80, Math.round(potential[k] - expectedGap(k, age) / Math.max(0.5, p.dev.growth))));
+  return p;
+}
+
+/**
+ * Hidden development for everyone on a roster, and amateur classes aged 16–22. A separate random stream,
+ * so a league's rosters and ratings are exactly what they were before the pipeline existed.
+ */
+export function seedPipeline(league: League): void {
+  const rng = createRng(league.seed ^ 0x2545f491);
+  for (const p of league.players) if (!p.dev) p.dev = rollDev(rng, p);
+  for (let age = PIPELINE.firstAge; age < PIPELINE.signAge; age++) {
+    for (let i = 0; i < PIPELINE.classSize; i++) league.amateurs.push(rollAmateur(rng, league.nextId++, age));
+  }
 }

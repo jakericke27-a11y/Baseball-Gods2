@@ -8,6 +8,7 @@ import { applyEnvironment, type LeagueEnvironment } from '../engine/atbat/enviro
 import { generateLeague } from '../engine/generate';
 import { ordinal } from '../engine/game/text';
 import { Moment, type GameResult } from '../engine/game/types';
+import { nextSeason, type OffseasonReport } from '../engine/offseason';
 import { createSeason, isOver, simDay, type Season } from '../engine/season/season';
 import type { League, Player } from '../engine/types';
 import { postHeadlines } from './post';
@@ -21,24 +22,45 @@ export interface Headline { day: number; text: string; teamId: number; big: bool
 
 export class Game {
   readonly seed: number;
-  readonly league: League;
-  readonly season: Season;
-  readonly players: Map<number, Player>;
-  readonly teamOf = new Map<number, number>();
+  league!: League;
+  season!: Season;
+  players!: Map<number, Player>;
+  teamOf = new Map<number, number>();
   userTeam: number;
+  /** This year's headlines. */
   headlines: Headline[] = [];
   /** Result indices (into season.results) by calendar day. */
-  readonly byDay = new Map<number, number[]>();
+  byDay = new Map<number, number[]>();
+  /** What happened over the last winter (Year 2 on). */
+  offseason: OffseasonReport | null = null;
 
   /** A new league, or (with `season`) one restored from a save. */
   constructor(seed: number, userTeam: number, league?: League, season?: Season) {
     this.seed = seed;
     this.userTeam = userTeam;
-    this.season = season ?? createSeason(league ?? generateLeague(seed), PARAMS, { year: 1, seed, logs: true, postseason: true });
-    this.league = this.season.league;
-    this.players = this.season.players;
+    this.bind(season ?? createSeason(league ?? generateLeague(seed), PARAMS, { year: 1, seed, logs: true, postseason: true }));
+  }
+
+  private bind(season: Season): void {
+    this.season = season;
+    this.league = season.league;
+    this.players = season.players;
+    this.teamOf = new Map();
     for (const t of this.league.teams) for (const id of t.playerIds) this.teamOf.set(id, t.id);
-    this.season.results.forEach((g, i) => { const a = this.byDay.get(g.day) ?? []; a.push(i); this.byDay.set(g.day, a); });
+    this.byDay = new Map();
+    season.results.forEach((g, i) => { const a = this.byDay.get(g.day) ?? []; a.push(i); this.byDay.set(g.day, a); });
+  }
+
+  get year() { return this.season.year; }
+
+  /** After the final: the winter (aging, retirements, signings), then Opening Day of the next year. */
+  startNextYear(): OffseasonReport {
+    if (!this.over) throw new Error('the year is not over');
+    const { season, report } = nextSeason(this.season);
+    this.bind(season);
+    this.headlines = [];
+    this.offseason = report;
+    return report;
   }
 
   get day() { return this.season.day; }

@@ -17,6 +17,7 @@ export interface TeamPlan {
 
 const POS_NUM: Record<string, number> = { C: 2, '1B': 3, '2B': 4, '3B': 5, SS: 6, LF: 7, CF: 8, RF: 9 };
 const batScore = (p: Player) => p.ratings.power + p.ratings.contact + p.ratings.discipline + 0.3 * p.ratings.speed;
+const fieldScore = (p: Player) => p.ratings.instincts + p.ratings.glove + p.ratings.cannon;
 const onBase = (p: Player) => p.ratings.contact + p.ratings.discipline + 0.3 * p.ratings.speed;
 const pitchScore = (p: Player) => p.ratings.velocity + p.ratings.control + p.ratings.movement;
 const STAFF_SIZE = 13;
@@ -33,6 +34,13 @@ export function buildTeamPlans(league: League): Map<number, TeamPlan> {
     for (const [pos, num] of Object.entries(POS_NUM)) {
       const best = hitters.filter((h) => h.position === pos && !slots.some((s) => s.player === h)).sort((a, b) => batScore(b) - batScore(a))[0];
       if (best) slots.push({ player: best, pos: num });
+    }
+    // Nobody natural at a spot (retirements can leave a hole): the best remaining glove-and-bat covers it out of position.
+    for (const [pos, num] of Object.entries(POS_NUM)) {
+      if (slots.some((s) => s.pos === num)) continue;
+      const cover = hitters.filter((h) => !slots.some((s) => s.player === h)).sort((a, b) => (batScore(b) + fieldScore(b)) - (batScore(a) + fieldScore(a)))[0];
+      if (cover) slots.push({ player: cover, pos: num });
+      void pos;
     }
     slots.push({ player: hitters.filter((h) => !slots.some((s) => s.player === h)).sort((a, b) => batScore(b) - batScore(a))[0], pos: 0 });
     // Batting order: two best on-base guys up top, then the bats by strength.

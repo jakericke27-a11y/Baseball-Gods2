@@ -217,5 +217,6 @@ export function newsView(app: App): string {
   const days = [...byDay.keys()].sort((a, b) => b - a);
   const body = days.length ? days.map((d) => `<h3 class="news-day">${dateLabel(d)}</h3><ul class="news-list">${byDay.get(d)!.map((h) => `<li class="${h.big ? 'big' : ''}${h.teamId === g.userTeam ? ' mine' : ''}">${esc(h.text)}</li>`).join('')}</ul>`).join('')
     : '<p class="note">No headlines yet. Big moments around the league show up here: walk-offs, slams, no-hitters, streaks and milestones.</p>';
-  return page(app, 'news', win({ id: 'w-news', title: 'Headlines', label: `${g.headlines.length} THIS YEAR`, body, cls: 'w-news' }));
+  const winter = g.offseason ? `<div class="row-actions news-actions">${btn(`THE OFFSEASON BEFORE YEAR ${g.year}`, 'go', { data: { to: 'offseason' } })}</div>` : '';
+  return page(app, 'news', winter + win({ id: 'w-news', title: 'Headlines', label: `${g.headlines.length} THIS YEAR`, body, cls: 'w-news' }));
 }

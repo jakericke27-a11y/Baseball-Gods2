@@ -136,6 +136,21 @@ async function main() {
   await sleep(20); await settle();
   ok(app().screen === 'home' && app().game, 'a password loads a year');
 
+  // The winter and Year 2
+  while (!app().game.over && doc.querySelector('[data-act="sim-end"]')) await click('[data-act="sim-end"]');
+  ok(app().game.over, 'the year is over');
+  await click('[data-act="to-offseason"]');
+  ok(app().screen === 'offseason' && doc.querySelectorAll('.off-cards .win').length === 6 && text('.banner-top').includes('YEAR 2'), 'the offseason report: six windows, Year 2 ahead');
+  ok(app().game.offseason.retirements.length > 0 && app().game.offseason.signings.length > 0, 'players retired and signed over the winter');
+  await click('.actions [data-act="go"][data-to="home"]');
+  ok(app().screen === 'home' && text('.banner-top').includes('YEAR 2') && app().game.day === 0 && app().game.headlines.length === 0, 'START YEAR 2: Opening Day, a clean slate of headlines');
+  ok(app().password() === '', 'the Year 1 password is no longer offered');
+  await click('[data-act="sim-week"]');
+  ok(app().game.season.results.length > 0 && app().game.year === 2, 'Year 2 plays');
+  ok(app().game.league.teams.every((t: any) => t.playerIds.length === 40), 'every team has a full 40-man roster');
+  await click('[data-act="news"]');
+  ok(doc.querySelector('[data-to="offseason"]'), 'the headlines screen links back to the winter report');
+
   if (errors.length) { console.log('\nErrors:\n' + errors.join('\n')); process.exit(1); }
   console.log('\nSmoke test passed.');
   process.exit(0);

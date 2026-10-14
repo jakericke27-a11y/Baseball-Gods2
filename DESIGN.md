@@ -89,6 +89,23 @@ sac flies, steals, wild pitches/passed balls, errors (glove), extra innings, wal
   recovery. Postseason stats are kept apart. The schedule grows as games are added, so `isOver` means the whole
   year; `regularOver` the regular season. Calibration and stat tools play regular seasons only.
 
+## Years and the offseason (`engine/development.ts`, `engine/offseason.ts`)
+- **Hidden development:** each player has a potential per rating, a growth factor (busts < 0.7 < late bloomers
+  > 1.3) and an aging factor, all log-normal around 1. Never shown; scouting (4.5) and stats are how you learn them.
+- **Curves per rating:** growth closes the gap to potential (about 1 point left at the peak age), then a plateau,
+  then a decline that steepens each year. Speed peaks at 24 and fades from 27; discipline and control mature at 29
+  and hold to 32–33. Young potentials drift a little until 24, so prospects surprise.
+- **The pipeline:** 150 sixteen-year-olds a year across the regions, rolled like league players but as potential.
+  Until the draft (1.6) everyone undrafted becomes a free agent at 23. Draftable ages will be 18–22.
+- **The winter:** age and develop everyone; retire by age × value (fringe players pushed out, stars hang on);
+  free agents 34+ retire and the pool keeps its best 250; every team refills to 22 position players + 18 pitchers,
+  worst record first, by position need, then up to two upgrades (+4 value). Pitcher roles follow stamina.
+- **Year 1 ages** are shaped like a settled league (mean ~28.5). The pipeline lives on its own random stream, so
+  Year 1 rosters and ratings are exactly what they were: no recalibration.
+- **No pull back:** the dials carry over unchanged; `npm run years -- 20` shows ages (28–29), talent (mean ±1,
+  spread settling from 5.3 to ~4.3 as teams replace Year 1's random scrubs) and the league line (AVG .256–.266,
+  ~10 R/G) holding over 20 years.
+
 ## Event log (`src/engine/log.ts`)
 Per game: PA events (inning/half, outs+bases before, batter, pitcher, play, fielder+batted-ball type,
 quality, runs+RBI, every pitch as one byte, runner movements incl. where outs happened), steals,
@@ -159,6 +176,9 @@ New-engine guards: runs vs BaseRuns check, RBI ≤ R, per-team start limits by r
   falls back to that replay save. Old saves replay once, then become full saves.
 - 2026-10-14 — Postseason (step 1.2): 2019 format, Game 163 tiebreakers, real October rest, "Galaxy Series" as
   the final's working name. TO END stops when the field is set; pressed again it plays out October.
+- 2026-10-14 — Offseason and Year 2 (step 1.3): hidden potential, amateurs at 16 (draftable 18–22 later), undrafted
+  23-year-olds fill rosters until the draft, one offseason report with START YEAR N (an offseason calendar is future
+  state). The Year 1 password stops being offered from Year 2 on (it can only replay Year 1); files carry later years.
 
 ## Design philosophy (2026-10-03)
 Realistic baseline; the fun is in finding combinations that BREAK it (ratings + abilities + favor +

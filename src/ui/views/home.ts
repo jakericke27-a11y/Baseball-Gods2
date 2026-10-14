@@ -15,18 +15,19 @@ import { banner, btn, esc, footer, link, thead, trow, ttable, win } from './comm
 export function bannerFor(g: Game): string {
   const days = g.season.regularDays, day = g.day;
   const champ = g.season.post?.champion;
-  if (g.over) return banner('YEAR 1', champ ? `YEAR COMPLETE · ${teamName(champ).toUpperCase()} WIN THE ${FINAL_NAME.toUpperCase()}` : 'YEAR COMPLETE');
-  if (inPostseason(g.season)) return banner('YEAR 1', `POSTSEASON · ${dateLabel(day)}`);
-  if (day >= days) return banner('YEAR 1', `GAME 163 · ${dateLabel(day)}`);
+  const Y = `YEAR ${g.year}`;
+  if (g.over) return banner(Y, champ ? `YEAR COMPLETE · ${teamName(champ).toUpperCase()} WIN THE ${FINAL_NAME.toUpperCase()}` : 'YEAR COMPLETE');
+  if (inPostseason(g.season)) return banner(Y, `POSTSEASON · ${dateLabel(day)}`);
+  if (day >= days) return banner(Y, `GAME 163 · ${dateLabel(day)}`);
   const left = days - day;
   const brk = g.season.schedule.allStarBreak;
   const tail = day >= brk && day < brk + 3 ? 'ALL-STAR BREAK' : left > 14 ? `${Math.ceil(left / 7)} WEEKS TO PLAYOFFS` : `${left} DAYS TO PLAYOFFS`;
   const head = g.season.results.length === 0 ? `OPENING DAY · ${dateLabel(day)}` : `WEEK ${weekOf(day)} · ${dateLabel(day)}`;
-  return banner('YEAR 1', `${head} · ${tail}`);
+  return banner(Y, `${head} · ${tail}`);
 }
 
 export function simActions(g: Game): string {
-  if (g.over) return btn('NEW LEAGUE', 'restart-open', { kind: 'secondary' });
+  if (g.over) return btn(`ON TO YEAR ${g.year + 1}`, 'to-offseason', { kind: 'primary', icon: 'ff', title: 'The winter: aging, retirements and signings, then Opening Day' }) + btn('NEW LEAGUE', 'restart-open', { kind: 'secondary' });
   const playing = !!g.gameOn(g.day, g.userTeam);
   return (playing ? btn('WATCH', 'watch', { kind: 'primary', icon: 'ball', title: 'Play today and watch your game pitch by pitch' }) : '')
     + btn('SIM DAY', 'sim-day', { kind: playing ? 'secondary' : 'primary', icon: 'hourglass' })
@@ -95,7 +96,7 @@ function tonight(g: Game): string {
   if (g.over) {
     const champ = g.season.post?.champion ?? 0;
     const mine = champ === g.userTeam ? `${teamName(g.userTeam)} are ${FINAL_NAME} champions.` : `${teamName(g.userTeam)} finished ${me.W}-${me.L}. ${esc(postText(g, g.userTeam))}.`;
-    return win({ id: 'w-tonight', title: 'Tonight', label: 'YEAR OVER', cls: 'w-tonight', body: `<p class="note">${champ ? `${teamName(champ)} win the ${FINAL_NAME}. ` : ''}${mine}</p><p class="note muted">Year 2 comes in a later build.</p>` });
+    return win({ id: 'w-tonight', title: 'Tonight', label: 'YEAR OVER', cls: 'w-tonight', body: `<p class="note">${champ ? `${teamName(champ)} win the ${FINAL_NAME}. ` : ''}${mine}</p><p class="note muted">The winter is next: players age, some retire, teams sign replacements.</p>${btn(`ON TO YEAR ${g.year + 1}`, 'to-offseason', { kind: 'primary', icon: 'ff' })}` });
   }
   const today = g.gameOn(g.day, g.userTeam);
   const out = regularOver(g.season) && !g.nextGameFor(g.userTeam);

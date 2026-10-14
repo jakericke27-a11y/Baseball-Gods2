@@ -17,7 +17,7 @@ import { SLOT, deleteLeague, getLeague, putLeague, requestPersistence } from './
 import { applyTeamColors, teamColors, teamName } from './teams';
 import { view } from './views';
 
-export type Screen = 'title' | 'picker' | 'home' | 'watch' | 'standings' | 'games' | 'leaders' | 'roster' | 'gamelog' | 'news';
+export type Screen = 'title' | 'picker' | 'home' | 'watch' | 'standings' | 'games' | 'leaders' | 'roster' | 'gamelog' | 'news' | 'offseason';
 export type Modal = { kind: 'settings' } | { kind: 'player'; id: number } | { kind: 'password' } | { kind: 'restart' };
 export interface Settings { readable: boolean; detail: PitchDetail; music: boolean; volume: number }
 export interface Busy { label: string; done: number; total: number; note: string; stoppable: boolean }
@@ -111,7 +111,8 @@ export class App {
     const g = this.game!;
     return { v: SAVE_VERSION, seed: g.seed, team: g.userTeam, day: g.day };
   }
-  password(): string { return this.game ? toPassword(this.saveData()) : ''; }
+  /** The 10-character password replays Year 1 only (seed, team, day). */
+  password(): string { return this.game && this.game.year === 1 ? toPassword(this.saveData()) : ''; }
 
   /** Autosave: the whole league to the database slot, after the screen has updated. Saves queue up; only the latest is written. */
   private persist() {
@@ -131,7 +132,7 @@ export class App {
         ok = await putLeague(SLOT, bytes, meta);
         if (ok) { this.slot = meta; this.saved = null; clearSave(); }
       } catch { ok = false; }
-      if (!ok) { const s = this.saveData(); writeSave(s); this.saved = s; this.storage = 'none'; continue; }
+      if (!ok) { if (g.year === 1) { const s = this.saveData(); writeSave(s); this.saved = s; } this.storage = 'none'; continue; }
       if (!this.persistAsked) { this.persistAsked = true; this.storage = (await requestPersistence()) ? 'persistent' : 'kept'; }
       else if (this.storage === 'none' || this.storage === 'unknown') this.storage = 'kept';
     }
@@ -312,7 +313,7 @@ export class App {
   /** Replay a saved year up to its day. */
   async load(s: SaveData): Promise<void> {
     let g: Game | null = null;
-    await this.withBusy('Restoring Year 1', s.day, false, async (step) => {
+    await this.withBusy('Replaying Year 1', s.day, false, async (step) => {
       await tick();
       g = new Game(s.seed, s.team);
       while (g.day < s.day && !g.over) {
@@ -574,6 +575,15 @@ export class App {
       case 'games-pick': this.gamesPick = Number(d.index); this.render(); return;
       case 'log-pick': this.logPick = Number(d.index); this.render(); return;
       case 'news': if (g) { this.screen = 'news'; this.render(); } return;
+      case 'to-offseason': {
+        if (!g || !g.over || this.busy) return;
+        await this.withBusy('The winter: aging, retirements, signings', 1, false, async () => { await tick(); g.startNextYear(); });
+        this.afterLoad();
+        this.screen = 'offseason';
+        this.persist();
+        this.render();
+        return;
+      }
       case 'copy-password': {
         const code = this.password();
         try { await navigator.clipboard.writeText(code); this.showToast('Password copied'); }

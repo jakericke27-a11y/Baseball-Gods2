@@ -1,5 +1,6 @@
 import type { App } from '../app';
 import { homeView } from './home';
+import { offseasonView } from './offseason';
 import { gameLogView, gamesView, leadersView, newsView, rosterView, standingsView } from './screens';
 import { busyView, modalView, pickerView, titleView, toastView } from './shell';
 import { watchView } from './watch';
@@ -17,6 +18,7 @@ export function view(app: App): string {
       case 'roster': screen = rosterView(app); break;
       case 'gamelog': screen = gameLogView(app); break;
       case 'news': screen = newsView(app); break;
+      case 'offseason': screen = app.game.offseason ? offseasonView(app) : homeView(app); break;
       default: screen = homeView(app);
     }
   }

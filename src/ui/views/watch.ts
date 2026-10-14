@@ -105,7 +105,7 @@ export function watchView(app: App): string {
   const final = f.kind === 'final';
   const [away, home] = r.teamIds;
   const sr = findSeries(app.game!, r.series);
-  const tail = sr ? `${seriesShort(sr)} GAME ${r.game}` : r.kind === 'tiebreak' ? 'GAME 163' : 'YEAR 1';
+  const tail = sr ? `${seriesShort(sr)} GAME ${r.game}` : r.kind === 'tiebreak' ? 'GAME 163' : `YEAR ${app.game!.year}`;
   const sub = final ? `FINAL${r.innings > 9 ? ` IN ${r.innings}` : ''} · FIRST PITCH ${formatStart(r.start)} · ${tail}`
     : `${f.half ? 'BOTTOM' : 'TOP'} ${ordinal(f.inning).toUpperCase()} · FIRST PITCH ${formatStart(r.start)} · ${tail}`;
   const controls = final
