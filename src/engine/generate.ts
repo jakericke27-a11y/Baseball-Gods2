@@ -5,6 +5,7 @@
  */
 import { expectedGap, RATING_KEYS, rollDev } from './development';
 import { createRng, type Rng } from './rng';
+import { autoPicks, DRAFT, foundingDraft, recordDraft, type DraftState } from './draft';
 import { setAllActive } from './roster';
 import { REGIONS, type Region, type TendencyKey } from './regions';
 import type { Bats, League, Player, PitcherRole, Position, RatingKey, Ratings, Team, Throws } from './types';
@@ -89,7 +90,25 @@ export function rollPlayer(rng: Rng, id: number, position: Position, role?: Pitc
   };
 }
 
+/** A new league, its founding draft auto-drafted by the AI for every team (tools, tests, and AUTO DRAFT). */
 export function generateLeague(seed: number): League {
+  const { league, draft } = foundingLeague(seed);
+  autoPicks(league, draft);
+  finishFounding(league, draft);
+  return league;
+}
+
+/** Close the founding draft: the record kept, every team's 26 set. The undrafted stay free agents. */
+export function finishFounding(league: League, draft: DraftState): void {
+  recordDraft(league, draft);
+  setAllActive(league);
+}
+
+/**
+ * A new league before its founding draft: 30 empty teams and a pool of generated players (the 1,200 the first build
+ * put on rosters, the same draws in the same order, plus 25% more from their own stream), all free agents for now.
+ */
+export function foundingLeague(seed: number): { league: League; draft: DraftState } {
   const rng = createRng(seed);
   const players: Player[] = [];
   const teams: Team[] = [];
@@ -107,11 +126,7 @@ export function generateLeague(seed: number): League {
         skipFifthAfterOffDay: rng.next() < 0.5,
       },
     };
-    for (const pos of [...HITTER_SLOTS, ...EXTRA_HITTERS]) {
-      const p = rollPlayer(rng, nextId++, pos);
-      players.push(p);
-      team.playerIds.push(p.id);
-    }
+    for (const pos of [...HITTER_SLOTS, ...EXTRA_HITTERS]) players.push(rollPlayer(rng, nextId++, pos));
     const nSP = 6 + rng.int(2);          // 6–7
     const nCL = 1 + rng.int(2);          // 1–2
     const nRP = 18 - nSP - nCL;          // 9–11
@@ -120,17 +135,19 @@ export function generateLeague(seed: number): League {
       ...Array<PitcherRole>(nRP).fill('RP'),
       ...Array<PitcherRole>(nCL).fill('CL'),
     ];
-    for (const role of roles) {
-      const p = rollPlayer(rng, nextId++, 'P', role);
-      players.push(p);
-      team.playerIds.push(p.id);
-    }
+    for (const role of roles) players.push(rollPlayer(rng, nextId++, 'P', role));
     teams.push(team);
   }
-  const league: League = { seed, players, teams, amateurs: [], freeAgents: [], retired: [], nextId, history: [], waivers: [] };
+  // 25% more, in the same shape (22 bats to 18 arms), from a stream of their own
+  const extra = createRng(seed ^ 0x7f4a7c15), template = [...HITTER_SLOTS, ...EXTRA_HITTERS];
+  const n = Math.round(players.length * DRAFT.poolExtra);
+  for (let i = 0; i < n; i++) {
+    const k = i % 40;
+    players.push(k < 22 ? rollPlayer(extra, nextId++, template[k]) : rollPlayer(extra, nextId++, 'P', k < 29 ? 'SP' : k < 38 ? 'RP' : 'CL'));
+  }
+  const league: League = { seed, players: [], teams, amateurs: [], freeAgents: players, retired: [], nextId, history: [], waivers: [], prospects: [], drafts: [] };
   seedPipeline(league);
-  setAllActive(league);
-  return league;
+  return { league, draft: foundingDraft(league, createRng(seed ^ 0x3c6ef372)) };
 }
 
 // ---------------------------------------------------------------- the amateur pipeline
@@ -167,7 +184,7 @@ export function rollAmateur(rng: Rng, id: number, age: number): Player {
  */
 export function seedPipeline(league: League): void {
   const rng = createRng(league.seed ^ 0x2545f491);
-  for (const p of league.players) if (!p.dev) p.dev = rollDev(rng, p);
+  for (const p of [...league.players, ...league.freeAgents]) if (!p.dev) p.dev = rollDev(rng, p);
   for (let age = PIPELINE.firstAge; age < PIPELINE.signAge; age++) {
     for (let i = 0; i < PIPELINE.classSize; i++) league.amateurs.push(rollAmateur(rng, league.nextId++, age));
   }

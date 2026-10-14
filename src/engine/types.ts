@@ -1,3 +1,4 @@
+import type { DraftPick } from './draft';
 import type { YearSummary } from './history';
 
 /** All ratings are on the 20–80 scouting scale; 50 is league average. */
@@ -97,7 +98,13 @@ export interface League {
   history: YearSummary[];
   /** Players on waivers (roster.ts). */
   waivers: Waiver[];
+  /** Drafted players off the 40: the team holds their rights until the next draft (draft.ts). */
+  prospects: Prospect[];
+  /** Every draft so far (the founding draft is year 0). */
+  drafts: Array<{ year: number; kind: 'founding' | 'cycle'; picks: DraftPick[] }>;
 }
+
+export interface Prospect { player: Player; teamId: number; /** Rights end at this year's draft. */ until: number; overall: number }
 
 export interface Waiver {
   playerId: number;

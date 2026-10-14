@@ -17,7 +17,7 @@ import type { Season, StandingRow } from './season/season';
 import type { TeamPlan } from './season/teams';
 import type { League, TeamStrategy } from './types';
 
-export const SNAPSHOT_VERSION = 5;
+export const SNAPSHOT_VERSION = 6;
 
 type Entries<V> = Array<[number, V]>;
 
@@ -118,6 +118,8 @@ const UPGRADES: Record<number, (s: SeasonSnap) => SeasonSnap> = {
     setAllActive(L);
     return { ...s, v: 5, rosterRules: true, userTeam: 0 };
   },
+  // v5 → v6: the draft (prospect pools and draft records start empty; the first four-year draft comes in time).
+  5: (s) => { const L = s.league as Partial<League> & League; L.prospects ??= []; L.drafts ??= []; return { ...s, v: 6 }; },
 };
 
 export function upgradeSnapshot(s: SeasonSnap): SeasonSnap {

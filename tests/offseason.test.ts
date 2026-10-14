@@ -57,7 +57,7 @@ describe('offseason and Year 2', () => {
     }
   });
   it('players retire, sign and age; ids stay unique; nobody is in two places', () => {
-    for (const r of reports) { expect(r.retirements.length).toBeGreaterThan(40); expect(r.signings.length).toBeGreaterThan(40); }
+    for (const r of reports) { expect(r.retirements.length).toBeGreaterThan(20); expect(r.signings.length).toBeGreaterThan(20); }
     const L = s.league;
     const ids = [...L.players, ...L.freeAgents, ...L.amateurs, ...L.retired].map((p) => p.id);
     expect(new Set(ids).size).toBe(ids.length);

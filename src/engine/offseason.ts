@@ -9,11 +9,12 @@
  */
 import { develop, playerValue, roleFor } from './development';
 import { PIPELINE, rollAmateur } from './generate';
+import { autoPicks, cycleDraft, done as draftDone, expireRights, isDraftYear, recordDraft, type DraftPick, type DraftState } from './draft';
 import { summarizeSeason } from './history';
 import { refreshPlan, rosterWinter, setAllActive } from './roster';
 import type { Rng } from './rng';
 import { createSeason, type Season } from './season/season';
-import type { League, Player, Position, Team } from './types';
+import type { League, Player, Position, Prospect, Team } from './types';
 
 export const ROSTER = { hitters: 22, pitchers: 18, upgrades: 2, upgradeMargin: 4, freeAgentPool: 250 };
 /** Position players a team keeps at each spot (the rest are utility men). */
@@ -44,19 +45,31 @@ export interface OffseasonReport {
   risers: Array<OffseasonMove & { change: number }>;
   fallers: Array<OffseasonMove & { change: number }>;
   newClass: number;
+  /** Prospects who joined a 40-man roster. */
+  promotions: OffseasonMove[];
+  /** The draft, in a draft winter (every pick). */
+  draft: DraftPick[];
 }
 
 const move = (p: Player, teamId: number): OffseasonMove => ({ id: p.id, name: p.name, age: p.age, teamId, value: Math.round(playerValue(p)) });
 
+/** The whole winter in one go (no draft): tests and tools. */
 export function runOffseason(league: League, year: number, rng: Rng, worstFirst: number[]): OffseasonReport {
-  const report: OffseasonReport = { year, retirements: [], signings: [], releases: [], risers: [], fallers: [], newClass: 0 };
+  const report = winterBefore(league, year, rng);
+  winterAfter(league, report, worstFirst, 0);
+  return report;
+}
+
+/** The first half of the winter: aging and development, retirements, the amateur pipeline. */
+export function winterBefore(league: League, year: number, rng: Rng): OffseasonReport {
+  const report: OffseasonReport = { year, retirements: [], signings: [], releases: [], risers: [], fallers: [], newClass: 0, promotions: [], draft: [] };
   const teamOf = new Map<number, Team>();
   for (const t of league.teams) for (const id of t.playerIds) teamOf.set(id, t);
   const byId = new Map(league.players.map((p) => [p.id, p]));
 
   // 1. A year older for everyone, and development.
   const before = new Map(league.players.map((p) => [p.id, playerValue(p)]));
-  for (const p of [...league.players, ...league.freeAgents, ...league.amateurs]) develop(p, rng);
+  for (const p of [...league.players, ...league.freeAgents, ...league.amateurs, ...league.prospects.map((x) => x.player)]) develop(p, rng);
   for (const p of league.players) if (p.position === 'P') p.pitcherRole = roleFor(p);
   const changes = league.players.map((p) => ({ ...move(p, teamOf.get(p.id)!.id), change: Math.round(playerValue(p) - before.get(p.id)!) }));
   changes.sort((a, b) => b.change - a.change || a.id - b.id);
@@ -89,8 +102,41 @@ export function runOffseason(league: League, year: number, rng: Rng, worstFirst:
   for (let i = 0; i < PIPELINE.classSize; i++) league.amateurs.push(rollAmateur(rng, league.nextId++, PIPELINE.firstAge));
   report.newClass = PIPELINE.classSize;
 
-  // 4. Every team refills to 22 + 18, worst record first, then makes a few upgrades.
+  return report;
+}
+
+/**
+ * The second half, after any draft: teams promote prospects who are ready (your team only on AUTO ROSTER), then
+ * refill to 22 + 18 from the free agents, worst record first, then make a few upgrades.
+ */
+export function winterAfter(league: League, report: OffseasonReport, worstFirst: number[], userTeam: number): void {
+  const teamOf = new Map<number, Team>();
+  for (const t of league.teams) for (const id of t.playerIds) teamOf.set(id, t);
+  const byId = new Map(league.players.map((p) => [p.id, p]));
+  const fromAmateurs = new Set(league.freeAgents.filter((p) => p.age === PIPELINE.signAge && !report.retirements.some((r) => r.id === p.id)).map((p) => p.id));
   const order = worstFirst.map((id) => league.teams.find((t) => t.id === id)!);
+  // 4a. Prospects ready to help join the 40, in place of the weakest of their kind if the 40 is full.
+  for (const t of order) {
+    if (t.id === userTeam && t.auto && !t.auto.roster) continue;
+    const mine = league.prospects.filter((x) => x.teamId === t.id && x.player.age >= PROSPECT_READY_AGE).sort((a, b) => playerValue(b.player) - playerValue(a.player) || a.overall - b.overall);
+    for (const pr of mine) {
+      const p = pr.player, kind = (q: Player) => (q.position === 'P') === (p.position === 'P');
+      const group = t.playerIds.map((id) => byId.get(id)!).filter(kind);
+      const cap = p.position === 'P' ? ROSTER.pitchers : ROSTER.hitters;
+      const worst = group.reduce<Player | null>((w, q) => (!w || playerValue(q) < playerValue(w) ? q : w), null);
+      if (group.length >= cap) {
+        if (!worst || playerValue(p) < playerValue(worst) + ROSTER.upgradeMargin) continue;
+        t.playerIds.splice(t.playerIds.indexOf(worst.id), 1);
+        league.players.splice(league.players.indexOf(worst), 1);
+        byId.delete(worst.id);
+        league.freeAgents.push(worst);
+        report.releases.push(move(worst, t.id));
+      } else if (playerValue(p) < (worst ? playerValue(worst) - 6 : 0)) continue; // not ready to beat what's there yet
+      promote(league, t, pr);
+      byId.set(p.id, p);
+      report.promotions.push(move(p, t.id));
+    }
+  }
   const sign = (t: Team, p: Player) => {
     league.freeAgents.splice(league.freeAgents.indexOf(p), 1);
     if (p.position === 'P') p.pitcherRole = roleFor(p);
@@ -132,7 +178,17 @@ export function runOffseason(league: League, year: number, rng: Rng, worstFirst:
       sign(t, pick);
     }
   }
-  return report;
+}
+
+/** Prospects don't help a big-league roster before this age. */
+export const PROSPECT_READY_AGE = 20;
+
+/** A prospect joins his team's 40 (to the reserves; the 26 is set on Opening Day). */
+export function promote(league: League, t: Team, pr: Prospect): void {
+  league.prospects.splice(league.prospects.indexOf(pr), 1);
+  if (pr.player.position === 'P') pr.player.pitcherRole = roleFor(pr.player);
+  t.playerIds.push(pr.player.id);
+  league.players.push(pr.player);
 }
 
 /** Teams worst to best by the year's record (run differential, then id, breaks ties). */
@@ -143,19 +199,42 @@ export function worstFirst(s: Season): number[] {
 /** Seed for a year's season (its RNG and schedule): the league's seed and the year, mixed. */
 export const yearSeed = (leagueSeed: number, year: number) => (Math.imul(leagueSeed ^ 0x9e3779b9, 0x85ebca6b) + Math.imul(year, 0xc2b2ae35)) >>> 0 & 0x7fffffff;
 
-/** The winter after a season, and the new season it leads to. The old season is used up (its league moves on). */
-export function nextSeason(prev: Season): { season: Season; report: OffseasonReport } {
-  prev.league.history.push(summarizeSeason(prev));
-  rosterWinter(prev.league);
-  const report = runOffseason(prev.league, prev.year, prev.rng, worstFirst(prev));
-  setAllActive(prev.league);
+/** A winter in progress: the first half done, a draft maybe waiting, the second half to come. */
+export interface Winter { prev: Season; report: OffseasonReport; draft: DraftState | null; worst: number[] }
+
+/** Close the season and start the winter: history, roster resets, aging, retirements, the pipeline, and in a draft
+ *  year the expired rights and the draft board with its lottery. */
+export function beginWinter(prev: Season): Winter {
+  const L = prev.league;
+  L.history.push(summarizeSeason(prev));
+  rosterWinter(L);
+  const report = winterBefore(L, prev.year, prev.rng);
+  let draft: DraftState | null = null;
+  if (isDraftYear(prev.year)) {
+    expireRights(L, prev.year);
+    draft = cycleDraft(L, prev.year, prev.rng);
+  }
+  return { prev, report, draft, worst: worstFirst(prev) };
+}
+
+/** Finish the winter (the draft must be done): signings, the 26s, and the new season. */
+export function finishWinter(w: Winter): { season: Season; report: OffseasonReport } {
+  const { prev, report } = w, L = prev.league;
+  if (w.draft) { if (!draftDone(w.draft)) autoPicks(L, w.draft); recordDraft(L, w.draft); report.draft = w.draft.picks; }
+  winterAfter(L, report, w.worst, prev.userTeam);
+  setAllActive(L);
   const year = prev.year + 1;
-  const season = createSeason(prev.league, prev.params, {
-    year, seed: yearSeed(prev.league.seed, year), logs: prev.keepLogs, postseason: prev.postseason, rosterRules: prev.rosterRules, userTeam: prev.userTeam,
+  const season = createSeason(L, prev.params, {
+    year, seed: yearSeed(L.seed, year), logs: prev.keepLogs, postseason: prev.postseason, rosterRules: prev.rosterRules, userTeam: prev.userTeam,
   });
   // Your hand-set lineup and staff carry into the new year (repaired for whoever left).
-  const mine = season.league.teams.find((t) => t.id === prev.userTeam);
+  const mine = L.teams.find((t) => t.id === prev.userTeam);
   const old = prev.plans.get(prev.userTeam);
   if (mine && old && mine.auto && (!mine.auto.lineup || !mine.auto.staff)) { season.plans.set(mine.id, old); refreshPlan(season, mine); }
   return { season, report };
+}
+
+/** The winter after a season, and the new season it leads to (the AI makes every draft pick). */
+export function nextSeason(prev: Season): { season: Season; report: OffseasonReport } {
+  return finishWinter(beginWinter(prev));
 }
