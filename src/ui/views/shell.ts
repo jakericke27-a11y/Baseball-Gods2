@@ -1,5 +1,4 @@
 /** Title screen, team picker, the modal windows (settings, player card, password) and the sim progress overlay. */
-import { decreeLine } from '../decree';
 import { REGIONS } from '../../engine/regions';
 import { buildTeamPlans } from '../../engine/season/teams';
 import type { League } from '../../engine/types';
@@ -72,31 +71,39 @@ function modal(id: string, title: string, body: string, wide = false): string {
 function ratingBar(label: string, v: number): string {
   const n = Math.round(((Math.max(20, Math.min(80, v)) - 20) / 60) * 12);
   const tone = v >= 65 ? 'hi' : v >= 50 ? 'mid' : 'lo';
-  return `<div class="rbar"><span class="k">${label}</span><span class="segs ${tone}" aria-hidden="true">${Array.from({ length: 12 }, (_, i) => `<i${i < n ? ' class="on"' : ''}></i>`).join('')}</span><span class="v">${v}</span></div>`;
+  const edge = v <= 30 ? ' v-lo' : v >= 70 ? ' v-hi' : '';
+  return `<div class="rbar"><span class="k">${label}</span><span class="segs ${tone}" aria-hidden="true">${Array.from({ length: 12 }, (_, i) => `<i${i < n ? ' class="on"' : ''}></i>`).join('')}</span><span class="v${edge}">${v}</span></div>`;
 }
 
 function playerCard(app: App, id: number): string {
-  const g = app.game!;
-  const p = g.players.get(id)!;
+  const g = app.game;
+  const L = g?.league ?? app.founding?.league;
+  // anyone: rostered, a free agent, an amateur or prospect on the draft board, or retired
+  const p = L && (g?.players.get(id) ?? [...L.players, ...L.freeAgents, ...L.amateurs, ...L.prospects.map((x) => x.player), ...L.retired].find((x) => x.id === id));
+  if (!p || !L) return '';
   const R = p.ratings;
   const region = REGIONS.find((r) => r.id === p.regionId);
-  const teamId = g.teamOf.get(id) ?? 0;
+  const teamId = g?.teamOf.get(id) ?? L.teams.find((t) => t.playerIds.includes(id))?.id ?? 0;
+  const prospectOf = L.prospects.find((x) => x.player.id === id);
   const isP = p.position === 'P';
   const hit = `<div class="rgroup"><h3>HITTING</h3>${ratingBar('POWER', r5(R.power))}${ratingBar('CONTACT', r5(R.contact))}${ratingBar('EYE', r5(R.discipline))}${ratingBar('SPEED', r5(R.speed))}</div>`;
   const field = `<div class="rgroup"><h3>FIELDING</h3>${ratingBar('RANGE', r5(R.instincts))}${ratingBar('GLOVE', r5(R.glove))}${ratingBar('ARM', r5(R.cannon))}</div>`;
   const arm = `<div class="rgroup"><h3>PITCHING</h3>${ratingBar('VELOCITY', r5(R.velocity))}${ratingBar('CONTROL', r5(R.control))}${ratingBar('MOVEMENT', r5(R.movement))}${ratingBar('STAMINA', r5(R.stamina))}</div>`;
   const clutch = `<div class="rgroup"><h3>CLUTCH</h3>${ratingBar('RISP', r5(R.clutchRisp))}${ratingBar('PRESSURE', r5(R.clutchPressure))}</div>`;
-  const b = g.season.batting.get(id), q = g.season.pitching.get(id);
+  const b = g?.season.batting.get(id), q = g?.season.pitching.get(id);
   const line = isP
-    ? (q ? `${q.W}-${q.L} · ${era2(era(q))} ERA · ${ip(q.outs)} IP · ${q.K} SO · ${q.SV} SV · ${whip(q).toFixed(2)} WHIP · ${q.G} G, ${q.GS} GS` : 'Has not pitched yet.')
-    : (b ? `${rate3(avg(b))}/${rate3(obp(b))}/${rate3(slg(b))} · ${b.HR} HR · ${b.RBI} RBI · ${b.SB} SB · ${b.BB} BB · ${b.K} K · ${b.PA} PA` : 'Has not batted yet.');
-  const role = isP ? (p.pitcherRole === 'SP' ? 'Starting pitcher' : p.pitcherRole === 'CL' ? 'Closer' : 'Relief pitcher') : p.position;
-  const body = `<p class="pc-line">${esc(role)} · bats ${p.bats}, throws ${p.throws} · age ${p.age} · ${esc(teamName(teamId))}</p>
-<p class="pc-line muted">Born in ${esc(region?.name ?? 'parts unknown')}${region ? ` (${esc(region.environment.replace(/_/g, ' '))})` : ''}</p>
+    ? (q ? `${q.W}-${q.L} · ${era2(era(q))} ERA · ${ip(q.outs)} IP · ${q.K} SO · ${q.BB} BB · ${q.SV} SV · ${whip(q).toFixed(2)} WHIP · ${q.G} G, ${q.GS} GS` : 'Has not pitched this year.')
+    : (b ? `${rate3(avg(b))}/${rate3(obp(b))}/${rate3(slg(b))} · ${b.HR} HR · ${b.RBI} RBI · ${b.R} R · ${b.SB} SB · ${b.BB} BB · ${b.K} K · ${b.PA} PA` : 'Has not batted this year.');
+  const role = isP ? (p.pitcherRole === 'SP' ? 'Starting pitcher' : p.pitcherRole === 'CL' ? 'Closer' : 'Relief pitcher') : (POS_NAME[p.position] ?? p.position);
+  const where = teamId ? teamName(teamId) : prospectOf ? `${teamName(prospectOf.teamId)} prospect` : 'retiredAfter' in p ? 'Retired' : p.age <= 22 && L.amateurs.includes(p) ? 'Amateur' : 'Free agent';
+  const body = `<div class="pc-who"><p>Born in ${esc(region?.name ?? 'parts unknown')}${region ? ` <span class="muted">(${esc(region.environment.replace(/_/g, ' '))})</span>` : ''}</p>
+<p>${esc(role)}</p><p>Bats ${p.bats} · Throws ${p.throws}</p><p class="pc-main">Age ${p.age} · ${esc(where)}</p></div>
 <div class="rgrid">${isP ? arm + field + clutch : hit + field + clutch}</div>
-<h3 class="pc-h">YEAR ${g.year}</h3><p class="pc-line">${line}</p>${decreeLine(g.league, g.year) ? `<p class="pc-line decree-line">${esc(decreeLine(g.league, g.year))}</p>` : ''}${postLine(g, id, isP)}${careerHtml(g, id, isP)}<p class="pc-line muted small">Ratings show to the nearest 5 on the 20–80 scouting scale.</p>`;
+${g ? `<h3 class="pc-h">YEAR ${g.year}</h3><p class="pc-line">${line}</p>${postLine(g, id, isP)}${careerHtml(g, id, isP)}` : ''}`;
   return modal('pc-t', esc(p.name), body);
 }
+
+const POS_NAME: Record<string, string> = { C: 'Catcher', '1B': 'First base', '2B': 'Second base', '3B': 'Third base', SS: 'Shortstop', LF: 'Left field', CF: 'Center field', RF: 'Right field', DH: 'Designated hitter', UT: 'Utility' };
 
 /** Year-by-year lines from history, this year's so far, and career totals. */
 function careerHtml(g: NonNullable<App['game']>, id: number, isP: boolean): string {
@@ -108,22 +115,24 @@ function careerHtml(g: NonNullable<App['game']>, id: number, isP: boolean): stri
     const cur = g.season.pitching.get(id);
     const all = [...past, ...(cur ? [{ year: g.year, teamId: g.teamOf.get(id) ?? 0, line: cur }] : [])];
     if (!all.length) return '';
-    const cells = (q: NonNullable<typeof cur>) => [`${q.W}-${q.L}`, era2(era(q)), String(q.G), String(q.GS), ip(q.outs), String(q.K), String(q.SV)];
+    const cells = (q: NonNullable<typeof cur>) => [`${q.W}-${q.L}`, era2(era(q)), String(q.G), String(q.GS), ip(q.outs), String(q.K), String(q.BB), whip(q).toFixed(2), String(q.SV)];
     const rows = all.map((y) => trow([String(y.year), String(y.teamId).padStart(2, '0'), String(y.year === g.year ? now.age : ageIn(y.year) ?? ''), ...cells(y.line)])).join('');
     const tot = total(all.map((y) => y.line))!;
-    const body = thead(['YR', 'TM', 'AGE', 'W-L', 'ERA', 'G', 'GS', 'IP', 'SO', 'SV']) + rows + trow(['ALL', '', '', ...cells(tot)], 0, true);
-    return `<h3 class="pc-h">CAREER</h3><div class="hscroll">${ttable('48px 34px 34px 50px minmax(50px, 1fr) 34px 34px 56px 40px 34px', 'Career pitching', body)}</div>`;
+    const body = thead(['YR', 'TM', 'AGE', 'W-L', 'ERA', 'G', 'GS', 'IP', 'SO', 'BB', 'WHIP', 'SV']) + rows + trow(['CAREER', '', '', ...cells(tot)], 0, true);
+    return careerBox(ttable('62px 34px 34px 56px 50px 34px 34px 60px 40px 40px 50px 34px', 'Career pitching', body).replace('class="ttable"', 'class="ttable full"'));
   }
   const past = careerBatting(g.league, id);
   const cur = g.season.batting.get(id);
   const all = [...past, ...(cur ? [{ year: g.year, teamId: g.teamOf.get(id) ?? 0, line: cur }] : [])];
   if (!all.length) return '';
-  const cells = (b: NonNullable<typeof cur>) => [String(b.PA), rate3(avg(b)), rate3(obp(b)), rate3(slg(b)), String(b.HR), String(b.RBI), String(b.SB)];
+  const cells = (b: NonNullable<typeof cur>) => [String(b.PA), rate3(avg(b)), rate3(obp(b)), rate3(slg(b)), String(b.H), String(b.D), String(b.HR), String(b.RBI), String(b.SB), String(b.BB), String(b.K)];
   const rows = all.map((y) => trow([String(y.year), String(y.teamId).padStart(2, '0'), String(y.year === g.year ? now.age : ageIn(y.year) ?? ''), ...cells(y.line)])).join('');
   const tot = total(all.map((y) => y.line))!;
-  const body = thead(['YR', 'TM', 'AGE', 'PA', 'AVG', 'OBP', 'SLG', 'HR', 'RBI', 'SB']) + rows + trow(['ALL', '', '', ...cells(tot)], 0, true);
-  return `<h3 class="pc-h">CAREER</h3><div class="hscroll">${ttable('48px 34px 34px 48px minmax(50px, 1fr) 50px 50px 34px 40px 34px', 'Career batting', body)}</div>`;
+  const body = thead(['YR', 'TM', 'AGE', 'PA', 'AVG', 'OBP', 'SLG', 'H', '2B', 'HR', 'RBI', 'SB', 'BB', 'K']) + rows + trow(['CAREER', '', '', ...cells(tot)], 0, true);
+  return careerBox(ttable('62px 34px 34px 46px 50px 50px 50px 40px 34px 34px 40px 34px 40px 40px', 'Career batting', body).replace('class="ttable"', 'class="ttable full"'));
 }
+/** Career lines, folded away until you open them. */
+const careerBox = (table: string) => `<details class="pc-career"><summary class="pc-h">CAREER</summary><div class="hscroll">${table}</div></details>`;
 
 function postLine(g: NonNullable<App['game']>, id: number, isP: boolean): string {
   const b = g.season.postBatting.get(id), q = g.season.postPitching.get(id);

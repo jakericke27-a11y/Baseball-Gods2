@@ -3,6 +3,17 @@ import type { BatLine, PitchLine } from '../engine/game/types';
 import { divisionStandings, type DivisionTable, type StandingRow } from '../engine/season/season';
 import type { Game } from './state';
 
+/** How a play reads in a game log: hit, home run, on base (walk, hit by pitch, error), out, or strikeout. */
+export function playTone(play: number | undefined): string {
+  if (play === undefined) return '';
+  if (play <= 1) return 't-k';
+  if (play === 7) return 't-hr';
+  if (play >= 4 && play <= 6) return 't-hit';
+  if (play === 2 || play === 3 || play === 12) return 't-on';
+  return 't-out';
+}
+export const LOG_KEY = '<p class="log-key" aria-hidden="true"><span class="t-hit">HIT</span><span class="t-hr">HOME RUN</span><span class="t-on">ON BASE</span><span class="t-out">OUT</span><span class="t-k">STRIKEOUT</span></p>';
+
 export const avg = (l: BatLine) => (l.AB ? l.H / l.AB : 0);
 export const obp = (l: BatLine) => { const d = l.AB + l.BB + l.HBP + l.SF; return d ? (l.H + l.BB + l.HBP) / d : 0; };
 export const slg = (l: BatLine) => (l.AB ? (l.H + l.D + 2 * l.T + 3 * l.HR) / l.AB : 0);
@@ -17,6 +28,17 @@ export const gamesBehind = (a: StandingRow, leader: StandingRow) => ((leader.W -
 export const gbText = (gb: number) => (gb === 0 ? '—' : gb.toFixed(1));
 export const last10 = (r: StandingRow) => { const w = r.last10.reduce((a, b) => a + b, 0); return `${w}-${r.last10.length - w}`; };
 export const streakText = (r: StandingRow) => (r.streak === 0 ? '—' : r.streak > 0 ? `W${r.streak}` : `L${-r.streak}`);
+
+// Standout numbers in color: green for good, red for bad (HTML, for table cells).
+const tone = (text: string, t: number) => (t > 0 ? `<span class="pos">${text}</span>` : t < 0 ? `<span class="neg">${text}</span>` : text);
+/** W and L cells, colored when the record is .550+ or .450 and under (after 10 games). */
+export const recordTone = (r: StandingRow, text: string) => tone(text, r.W + r.L < 10 ? 0 : pct(r) >= 0.55 ? 1 : pct(r) <= 0.45 ? -1 : 0);
+/** Run differential, colored past ±0.4 runs a game. */
+export const diffTone = (r: StandingRow) => { const d = r.RS - r.RA, g = Math.max(1, r.W + r.L); return tone(d > 0 ? `+${d}` : String(d), Math.abs(d) / g < 0.4 ? 0 : Math.sign(d)); };
+/** Streaks of three or more, colored. */
+export const streakTone = (r: StandingRow) => tone(streakText(r), Math.abs(r.streak) >= 3 ? Math.sign(r.streak) : 0);
+/** Last ten, colored at 7-3 and 3-7. */
+export const last10Tone = (r: StandingRow) => { const w = r.last10.reduce((a, b) => a + b, 0); return tone(last10(r), r.last10.length < 10 ? 0 : w >= 7 ? 1 : w <= 3 ? -1 : 0); };
 
 /** Streak heat: +1..+3 hot (flames), -1..-3 cold (ice), 0 neither. Last-10 counts only once 10 games exist. */
 export function heat(r: StandingRow): number {

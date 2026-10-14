@@ -280,6 +280,16 @@ New-engine guards: runs vs BaseRuns check, RBI ≤ R, per-team start limits by r
 - 2026-10-14 — Modifiers and the Gods' decree (step 2.2): decrees shift league dials (your call), one a year from
   Year 2, a quarter lingering for good. The 20-year baseline is now recorded with the Gods on
   (`calibration/years-baseline.json`); `--no-gods` checks against the old Gods-free baseline, which still matches exactly.
+- 2026-10-14 — Your expiring prospects: with AUTO ROSTER off nothing promoted your draft picks, so their rights ran out
+  unseen (a test team lost 40 prospects in 20 years and sank to last). Now, the winter their rights end, the AUTO rule
+  gets one look at each and keeps whoever it would have promoted; the winter report lists them as KEPT.
+- 2026-10-14 — UI pass from play notes: titles in the pixel mono (blackletter only on the logo), the playoff line in
+  red, plays colored in the game log and the watch log (hit, home run, on base, out, strikeout, with a key), tables
+  centered under their headers with light column rules, standout records / run differential / streaks / last 10 in
+  green and red, one text size across the dashboard, the player card reworked (birthplace, position, bats/throws,
+  age · team; ratings of 30 and under outlined red, 70 and up green; no decree line; career folded away, with more
+  columns and a CAREER total), draft names open the player card, the winter report splits into your team and the
+  league, and Races hides the crown watch, chases and streak lists until someone qualifies.
 
 ## Design philosophy (2026-10-03)
 Realistic baseline; the fun is in finding combinations that BREAK it (ratings + abilities + favor +

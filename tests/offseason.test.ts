@@ -5,7 +5,7 @@ import { DEFAULT_PARAMS } from '../src/engine/atbat/params';
 import { applyEnvironment, type LeagueEnvironment } from '../src/engine/atbat/environment';
 import { develop, playerValue, RATING_KEYS } from '../src/engine/development';
 import { generateLeague, PIPELINE } from '../src/engine/generate';
-import { nextSeason } from '../src/engine/offseason';
+import { nextSeason , keepExpiring } from '../src/engine/offseason';
 import { createRng } from '../src/engine/rng';
 import { createSeason, simToEnd, type Season } from '../src/engine/season/season';
 import { restoreSeason, snapshotSeason } from '../src/engine/snapshot';
@@ -124,5 +124,31 @@ describe('history', () => {
   it('a season of history is small: under 250 KB as JSON', () => {
     const bytes = JSON.stringify(H[2]).length;
     expect(bytes).toBeLessThan(250_000);
+  });
+});
+
+describe('your prospects before their rights run out', () => {
+  const setup = (auto: boolean) => {
+    const L = generateLeague(12);
+    const t = L.teams.find((x) => x.id === 5)!;
+    t.auto = { lineup: true, staff: true, roster: auto };
+    const star = L.amateurs.find((p) => p.position !== 'P')!;
+    L.amateurs.splice(L.amateurs.indexOf(star), 1);
+    for (const k of Object.keys(star.ratings) as Array<keyof typeof star.ratings>) star.ratings[k] = 75;
+    L.prospects.push({ player: star, teamId: 5, until: 4, overall: 1 });
+    const report = { year: 4, retirements: [], signings: [], releases: [], risers: [], fallers: [], newClass: 0, promotions: [], kept: [], draft: [] };
+    keepExpiring(L, 5, 4, report);
+    return { L, t, star, report };
+  };
+  it('with AUTO ROSTER off, a prospect AUTO would keep joins your 40 instead of being lost', () => {
+    const { L, t, star, report } = setup(false);
+    expect(t.playerIds).toContain(star.id);
+    expect(L.prospects.some((x) => x.player.id === star.id)).toBe(false);
+    expect(report.kept.map((m) => m.id)).toEqual([star.id]);
+  });
+  it('on AUTO nothing changes here (the usual promotions handle it)', () => {
+    const { t, star, report } = setup(true);
+    expect(t.playerIds).not.toContain(star.id);
+    expect(report.kept).toEqual([]);
   });
 });

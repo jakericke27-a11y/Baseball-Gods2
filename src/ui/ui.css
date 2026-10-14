@@ -21,12 +21,13 @@
   /* type: blackletter titles; labels and numbers in Determination Mono, a pixel font drawn on a 16px grid.
      Sizes stay on multiples of 8px so strokes land on whole pixels (16 and 32 are crisp on every screen). */
   --f-logo: 'Jacquard 24', 'Old English Text MT', serif;
-  --f-title: 'Jacquard 24', 'Old English Text MT', serif;
+  /* Titles read in the pixel mono; the blackletter is for the Baseball Gods logo only. */
+  --f-title: 'Determination Mono', 'Courier New', monospace;
   --f-label: 'Determination Mono', 'Courier New', monospace;
   --f-data: 'Determination Mono', 'Courier New', monospace;
   --l-xs: 16px; --l-s: 16px; --l-m: 16px; --l-l: 24px;
   --d-s: 16px; --d-m: 24px; --d-l: 24px; --d-xl: 32px; --d-xxl: 48px;
-  --t-win: 26px;
+  --t-win: 24px;
 }
 :root.readable {
   --f-title: 'Atkinson Hyperlegible', Arial, sans-serif;
@@ -108,9 +109,14 @@ svg.px { display: block; flex-shrink: 0; }
 
 /* ---------------------------------------------------------------- streak tables */
 .ttable { display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
-.thead, .trow { display: grid; grid-template-columns: var(--cols); gap: 6px; align-items: center; }
+.thead, .trow { display: grid; grid-template-columns: var(--cols); gap: 0; align-items: center; }
 .thead { padding: 0 14px 4px; font: var(--l-xs)/1 var(--f-label); letter-spacing: 1px; color: var(--muted); }
-.thead > :not(:first-child), .trow > :not(:first-child) { text-align: right; }
+/* numbers sit centered under their headers, with a light rule between columns */
+.thead > *, .trow > * { padding: 0 4px; }
+.thead > :not(:first-child), .trow > :not(:first-child) { text-align: center; border-left: 2px solid var(--rule); }
+.thead > :not(:first-child) { border-left-color: transparent; }
+.pos { color: var(--good); }
+.neg { color: var(--bad); }
 .trow { position: relative; margin: 0 2px; padding: 6px 12px; border-bottom: 4px solid var(--rule); font: var(--d-m)/1 var(--f-data); }
 .trow > :first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .trow .link { font: var(--l-m)/1.1 var(--f-label); }
@@ -133,7 +139,7 @@ svg.px { display: block; flex-shrink: 0; }
 @keyframes fx-out-edge { from { box-shadow: inset 0 0 0 4px var(--fire); } to { box-shadow: inset 0 0 0 4px transparent; } }
 @keyframes fx-thaw-edge { from { box-shadow: inset 0 0 0 4px var(--ice); } to { box-shadow: inset 0 0 0 4px transparent; } }
 .trow.mine { background: var(--hi); outline: 4px solid var(--frame); outline-offset: 2px; }
-.playoff-line { margin: 0 2px 4px; padding: 6px 0 4px; border-bottom: 4px dashed var(--action); font: var(--l-xs)/1 var(--f-label); letter-spacing: 3px; color: var(--playoff); text-align: center; }
+.playoff-line { margin: 0 2px 4px; padding: 6px 0 4px; border-bottom: 4px dashed var(--bad); font: var(--l-xs)/1 var(--f-label); letter-spacing: 3px; color: var(--bad); text-align: center; }
 
 /* ---------------------------------------------------------------- buttons */
 .btn { display: inline-flex; align-items: center; gap: 10px; min-height: 48px; padding: 4px 14px; border: 4px solid var(--text); border-radius: 0; background: var(--solid); color: var(--text); font: 600 var(--l-m)/1 var(--f-label); letter-spacing: 1px; white-space: nowrap; cursor: pointer; box-shadow: 0 6px 0 var(--night); }
@@ -241,11 +247,22 @@ table.linescore.small { font-size: var(--d-m); }
 .log-line.scored { color: #FFFFFF; }
 .log-line.scored::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 8px; vertical-align: 2px; background: var(--gold); }
 .log-line.change { color: var(--muted); }
+/* what happened, at a glance: a mark on the left and a tint */
+.log-line.t-hit, .log-line.t-hr, .log-line.t-on, .log-line.t-out, .log-line.t-k { padding-left: 10px; border-left: 4px solid transparent; }
+.log-line.t-hit { border-left-color: var(--good); color: #D8F5DF; }
+.log-line.t-hr { border-left-color: var(--gold); color: var(--gold); }
+.log-line.t-on { border-left-color: var(--ice); color: #D9F1FB; }
+.log-line.t-out { border-left-color: var(--rule); color: var(--muted); }
+.log-line.t-k { border-left-color: var(--bad); color: #F5C7C0; }
+.log-key { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 0 8px; font: var(--l-xs)/1.2 var(--f-label); }
+.log-key span { padding-left: 8px; border-left: 4px solid; }
+.log-key .t-hit { border-color: var(--good); } .log-key .t-hr { border-color: var(--gold); } .log-key .t-on { border-color: var(--ice); }
+.log-key .t-out { border-color: var(--rule); } .log-key .t-k { border-color: var(--bad); }
 .log-line.now { color: #FFFFFF; }
 .log-score { margin-left: 6px; color: var(--gold); }
 
 /* ---------------------------------------------------------------- pages */
-.page-h { margin: 4px 0 0; font: 400 32px/1 var(--f-title); text-shadow: 3px 3px 0 var(--night); }
+.page-h { margin: 4px 0 0; font: 400 24px/1 var(--f-title); letter-spacing: 1px; text-shadow: 3px 3px 0 var(--night); }
 .page-h .muted { font: var(--l-s)/1 var(--f-label); letter-spacing: 1px; text-shadow: none; }
 .two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; align-items: start; }
 .league-col { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
@@ -270,11 +287,15 @@ table.linescore.small { font-size: var(--d-m); }
 .sc-meta { font: var(--d-s)/1.1 var(--f-data); color: var(--muted); }
 .sched { display: grid; gap: 2px; padding: 8px 0; border-bottom: 4px solid var(--rule); font: var(--d-m)/1.15 var(--f-data); }
 .sched.mine { color: #FFFFFF; }
+/* ---------------------------------------------------------------- the dashboard reads at one size */
+.dash .trow, .dash .pen-row, .dash .prob, .dash .yt-race, .dash .yt-last, .dash .note, .dash .lead-name, .dash .lead-val, .dash .kv .v, .dash .yt-place { font-size: 16px; }
+.dash .trow .link, .dash .pen-name .link, .dash .prob .link { font-size: 16px; }
+
 /* ---------------------------------------------------------------- the Gods' decree */
 .decree { display: grid; grid-template-columns: 24px minmax(0, 1fr) 24px; margin: 0 0 26px; box-shadow: 8px 8px 0 var(--drop); transform-origin: center; animation: unfurl 0.9s steps(6) 1 both; }
 .decree-mid { padding: 16px 24px 14px; background: var(--parch); color: var(--ink); text-align: center; overflow: hidden; }
 .decree-k { margin: 0 0 6px; font: var(--l-xs)/1.2 var(--f-label); letter-spacing: 3px; color: var(--parch-sub); }
-.decree-title { margin: 0 0 8px; font: 400 40px/1.05 var(--f-title); color: var(--ink); text-shadow: 3px 3px 0 var(--parch-shadow); }
+.decree-title { margin: 0 0 8px; font: 400 32px/1.1 var(--f-title); color: var(--ink); text-shadow: 3px 3px 0 var(--parch-shadow); }
 .decree-fx { margin: 0; font: var(--d-s)/1.35 var(--f-data); color: var(--ink); }
 .decree-fx.muted-ink { margin-top: 4px; color: var(--parch-sub); }
 .decree-line { color: var(--gold); }
@@ -386,7 +407,16 @@ details.half[open] summary::before { content: '-'; }
 .segs.hi i.on { background: var(--gold); }
 .segs.mid i.on { background: var(--frame); }
 .segs.lo i.on { background: var(--muted); }
-.pc-line { margin: 4px 0; font: var(--d-m)/1.25 var(--f-data); }
+.pc-line { margin: 4px 0; font: var(--d-s)/1.3 var(--f-data); }
+.pc-who p { margin: 0 0 2px; font: var(--d-s)/1.3 var(--f-data); color: var(--muted); }
+.pc-who .pc-main { margin-top: 6px; color: var(--text); }
+.rbar .v.v-lo, .rbar .v.v-hi { padding: 0 2px; outline: 2px solid; outline-offset: 1px; }
+.rbar .v.v-lo { color: var(--bad); outline-color: var(--bad); }
+.rbar .v.v-hi { color: var(--good); outline-color: var(--good); }
+.pc-career summary { cursor: pointer; list-style: none; }
+.pc-career summary::before { content: '+ '; }
+.pc-career[open] summary::before { content: '− '; }
+.modal .ttable .trow, .modal .ttable .thead { font-size: 16px; }
 .pc-h { margin-top: 10px; }
 .set-group { display: flex; flex-direction: column; gap: 10px; padding: 10px 0 16px; border-bottom: 4px solid var(--rule); }
 .set-group:last-child { border-bottom: 0; }
@@ -435,7 +465,7 @@ input[type="file"] { font: var(--d-s)/1.2 var(--f-data); }
   .lead-grid { grid-template-columns: 1fr; }
   .music-test { grid-template-columns: 1fr 1fr; }
   /* the playoff race on a phone: team, record, the number and the odds */
-  .decree-title { font-size: 28px; }
+  .decree-title { font-size: 24px; }
   .race-t { --cols: minmax(0, 1fr) 28px 28px 44px 44px !important; }
   .race-t .thead > :nth-child(4), .race-t .trow > :nth-child(4), .race-t .thead > :nth-child(6), .race-t .trow > :nth-child(6), .race-t .x { display: none; }
 }

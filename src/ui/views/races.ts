@@ -2,7 +2,7 @@
 import type { TeamRace } from '../../engine/season/races';
 import type { App } from '../app';
 import type { Game } from '../state';
-import { heat, last10, pct, streakText } from '../stats';
+import { heat, last10, pct, recordTone, streakText } from '../stats';
 import {
   activeStreaks, crownWatch, FORM_WINDOWS, hotCold, inningsText, leaderRaces, milestoneChases, oddsText, pctText,
   playoffPicture, recordChases, recordText, type Form,
@@ -31,7 +31,7 @@ function playoffRaceWin(g: Game, league: number): string {
     const num = t.clinched === 'division' || (t.clinched && t.spot !== 'division') ? '—' : t.magic !== null ? `M${t.magic}` : t.elim !== null && !t.eliminated ? `E${t.elim}` : '—';
     const name = `${m ? `<span class="race-mark m-${m}" title="${esc(m === 'z' ? 'Clinched the division' : m === 'x' ? 'Clinched a playoff spot' : 'Eliminated')}">${m}</span>` : ''}${link(teamName(t.teamId), 'team', { id: t.teamId })}`;
     const sub = t.spot === 'division' ? `<span class="muted x"> ${DIVISIONS[t.division]}</span>` : '';
-    return trow([name + sub, String(r.W), String(r.L), String(t.left), num, odds(t.odds.division, !t.divisionOut, t.clinched === 'division' || g.day >= g.season.regularDays), odds(t.odds.berth, !t.eliminated, !!t.clinched || g.day >= g.season.regularDays)], heat(r), t.teamId === g.userTeam);
+    return trow([name + sub, recordTone(r, String(r.W)), recordTone(r, String(r.L)), String(t.left), num, odds(t.odds.division, !t.divisionOut, t.clinched === 'division' || g.day >= g.season.regularDays), odds(t.odds.berth, !t.eliminated, !!t.clinched || g.day >= g.season.regularDays)], heat(r), t.teamId === g.userTeam);
   };
   const cols = 'minmax(0, 1fr) 32px 32px 38px 44px 46px 46px';
   const head = thead(['TEAM', 'W', 'L', 'LEFT', 'M/E', 'DIV', 'IN']);
@@ -54,6 +54,7 @@ function leaderRacesWin(g: Game): string {
 
 function crownWin(g: Game): string {
   const w = crownWatch(g);
+  if (!w.length) return ''; // shows up when someone is in range
   const name = (k: string) => ({ AVG: 'average', HR: 'homers', RBI: 'RBI', W: 'wins', SO: 'strikeouts', ERA: 'ERA' })[k] ?? k;
   const body = w.length ? `<ul class="chase-list">${w.map((x) => `<li${mineCls(g, x.playerId)}>${who(g, x.playerId)}<span class="small">${x.leads.length === 3 ? 'Leads all three' : `Leads ${x.leads.map(name).join(' and ')}; ${x.chasing.map((c) => `${c.behind} back in ${name(c.cat)}`).join(', ')}`}</span></li>`).join('')}</ul>`
     : '<p class="note muted small">Nobody leads two of the three with the third in reach.</p>';
@@ -62,11 +63,9 @@ function crownWin(g: Game): string {
 
 function chasesWin(g: Game): string {
   const ms = milestoneChases(g).slice(0, 8), rc = recordChases(g);
+  if (!ms.length && !rc.length) return ''; // shows up when someone is chasing
   const list = (cs: typeof ms) => `<ul class="chase-list">${cs.map((c) => `<li${mineCls(g, c.playerId)}>${who(g, c.playerId)}<span class="small">${esc(c.text)}</span></li>`).join('')}</ul>`;
-  const recNote = g.league.history.length ? 'Nobody is on a record pace.' : 'Records start once Year 1 is in the books.';
-  const msNote = g.league.history.length ? 'Nobody is closing in on a career milestone.' : 'Careers are young: milestones (500 homers, 3,000 hits, 300 wins) come into view after a few years.';
-  const body = `<h3 class="sub-h">RECORD PACE</h3>${rc.length ? list(rc) : `<p class="note muted small">${recNote}</p>`}
-<h3 class="sub-h">CAREER MILESTONES</h3>${ms.length ? list(ms) : `<p class="note muted small">${msNote}</p>`}`;
+  const body = `${rc.length ? `<h3 class="sub-h">RECORD PACE</h3>${list(rc)}` : ''}${ms.length ? `<h3 class="sub-h">CAREER MILESTONES</h3>${list(ms)}` : ''}`;
   return win({ id: 'w-chases', title: 'Chases', label: 'RECORDS AND MILESTONES', body });
 }
 
@@ -81,16 +80,16 @@ function formWin(app: App): string {
 function streaksWin(g: Game): string {
   const s = activeStreaks(g);
   const list = (title: string, rows: Array<[number, number]>, shown: (v: number) => string, empty: string) =>
-    `<h3 class="sub-h">${title}</h3>${rows.length ? `<ol class="lead-list">${rows.map(([id, v], i) => `<li${mineCls(g, id)}><span class="rank">${i + 1}</span><span class="nm">${who(g, id)}</span><span class="val">${shown(v)}</span></li>`).join('')}</ol>` : `<p class="note muted small">${empty}</p>`}`;
-  const best = (k: 'hit' | 'onBase' | 'scoreless', shown: (v: number) => string) => (s.best[k][0] ? `Year's best: ${esc(g.name(s.best[k][1]))}, ${shown(s.best[k][0])}` : '');
+    (rows.length ? `<h3 class="sub-h">${title}</h3><ol class="lead-list">${rows.map(([id, v], i) => `<li${mineCls(g, id)}><span class="rank">${i + 1}</span><span class="nm">${who(g, id)}</span><span class="val">${shown(v)}</span></li>`).join('')}</ol>` : (void empty, ''));
+  const best = (k: 'hit' | 'onBase' | 'scoreless', shown: (v: number) => string) => (s.best[k][0] ? `<p class="note muted small">Year's best: ${esc(g.name(s.best[k][1]))}, ${shown(s.best[k][0])}</p>` : '');
   const games = (v: number) => `${v} G`, inn = (v: number) => `${inningsText(v)} IP`;
   const teams = g.league.teams.map((t) => g.season.standings.get(t.id)!).filter((r) => heat(r) !== 0).sort((a, b) => b.streak - a.streak);
   const teamRows = teams.length ? ttable('minmax(0, 1fr) 44px 44px', 'Team streaks', thead(['TEAM', 'STK', 'L10']) + teams.map((r) => trow([link(teamName(r.teamId), 'team', { id: r.teamId }), streakText(r), last10(r)], heat(r), r.teamId === g.userTeam)).join(''))
-    : '<p class="note muted small">No team is on fire or on ice.</p>';
-  const body = `${list('HITTING', s.hit, games, 'No hitting streaks of 5+ games.')}<p class="note muted small">${best('hit', games)}</p>
-${list('ON BASE', s.onBase, games, 'No on-base streaks of 10+ games.')}<p class="note muted small">${best('onBase', games)}</p>
-${list('SCORELESS', s.scoreless, inn, 'No scoreless streaks of 10+ innings.')}<p class="note muted small">${best('scoreless', inn)}</p>
-<h3 class="sub-h">FIRE AND ICE</h3>${teamRows}`;
+    : '';
+  const body = `${list('HITTING', s.hit, games, 'No hitting streaks of 5+ games.')}${best('hit', games)}
+${list('ON BASE', s.onBase, games, 'No on-base streaks of 10+ games.')}${best('onBase', games)}
+${list('SCORELESS', s.scoreless, inn, 'No scoreless streaks of 10+ innings.')}${best('scoreless', inn)}
+${teamRows ? `<h3 class="sub-h">FIRE AND ICE</h3>${teamRows}` : ''}`;
   return win({ id: 'w-streaks', title: 'Streaks', label: 'ACTIVE', body });
 }
 

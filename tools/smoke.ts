@@ -150,7 +150,9 @@ async function main() {
   while (!app().game.over && doc.querySelector('[data-act="sim-end"]')) await click('[data-act="sim-end"]');
   ok(app().game.over, 'the year is over');
   await click('[data-act="to-offseason"]');
-  ok(app().screen === 'offseason' && doc.querySelectorAll('.off-cards .win').length === 6 && text('.banner-top').includes('YEAR 2'), 'the offseason report: six windows, Year 2 ahead');
+  ok(app().screen === 'offseason' && doc.querySelector('#w-off-you-t') && text('.banner-top').includes('YEAR 2'), 'the offseason report opens on your team, Year 2 ahead');
+  await click('[data-act="off-scope"][data-scope="league"]');
+  ok(doc.querySelectorAll('.off-cards .win').length === 5 && !doc.querySelector('#w-off-you-t'), 'THE LEAGUE: retirements, signings, risers, fallers, the new class');
   ok(app().game.offseason.retirements.length > 0 && app().game.offseason.signings.length > 0, 'players retired and signed over the winter');
   ok(/THE YEAR OF THE /.test(text('.decree-title')) && app().game.offseason.decree?.from === 2, "the Gods' decree for Year 2 unrolls on the winter report");
   await click('.actions [data-act="go"][data-to="home"]');
@@ -178,7 +180,7 @@ async function main() {
   const vet = app().game.league.players.find((p: any) => p.position !== 'P' && app().game.league.history[0].batting.some((r: number[]) => r[0] === p.id) && app().game.season.batting.get(p.id))!;
   await app().act('player', { id: String(vet.id) }); await settle();
   const career = [...doc.querySelectorAll('.modal [aria-label="Career batting"] .trow')].map((r) => r.textContent);
-  ok(career.length === 3 && career[0]!.startsWith('1') && career[2]!.startsWith('ALL'), `a veteran's card shows his career: ${career.length} rows`);
+  ok(career.length === 3 && career[0]!.startsWith('1') && career[2]!.startsWith('CAREER') && doc.querySelector('.modal details.pc-career:not([open])'), `a veteran's card folds his career away: ${career.length} rows`);
   await click('[data-act="close"]');
   await click('.nav [data-act="go"][data-to="standings"]');
   ok(doc.querySelectorAll('.past-list li').length === 1, 'standings list the past season and its champion');

@@ -5,7 +5,7 @@ import { REGIONS } from '../../engine/regions';
 import type { League, Player } from '../../engine/types';
 import type { App } from '../app';
 import { teamName } from '../teams';
-import { banner, btn, esc, r5, win } from './common';
+import { banner, btn, esc, link, r5, win } from './common';
 
 export interface DraftView { league: League; draft: DraftState; userTeam: number }
 
@@ -26,7 +26,7 @@ export function draftView(app: App, v: DraftView): string {
     return p.position === 'P' ? `VEL ${r5(R.velocity)} · CTL ${r5(R.control)} · MOV ${r5(R.movement)} · STA ${r5(R.stamina)}`
       : `POW ${r5(R.power)} · CON ${r5(R.contact)} · EYE ${r5(R.discipline)} · SPD ${r5(R.speed)} · GLV ${r5(R.glove)}`;
   };
-  const rows = board.map(({ p, pr }) => `<tr><th scope="row">${esc(p.name)}<span class="muted small d-sub">${esc(REGIONS.find((r) => r.id === p.regionId)?.name ?? '')}</span></th>
+  const rows = board.map(({ p, pr }) => `<tr><th scope="row">${link(p.name, 'player', { id: p.id })}<span class="muted small d-sub">${esc(REGIONS.find((r) => r.id === p.regionId)?.name ?? '')}</span></th>
 <td>${p.position === 'P' ? p.pitcherRole : p.position}</td><td>${p.age}</td><td>${pr.now}</td><td class="ceil">${pr.lo}–${pr.hi}</td><td class="small muted">${ratings(p)}</td>
 <td class="acts">${yours ? btn('PICK', 'draft-pick', { kind: 'primary', data: { id: p.id } }) : ''}</td></tr>`).join('');
   const filters = (['all', 'bats', 'arms'] as const).map((f) => `<button type="button" class="tab${filter === f ? ' on' : ''}" data-act="draft-filter" data-f="${f}" aria-pressed="${filter === f}">${f.toUpperCase()}</button>`).join('');
@@ -37,7 +37,7 @@ export function draftView(app: App, v: DraftView): string {
   const clock = done(d) ? '<p class="note">The draft is complete.</p>'
     : `<p class="clock${yours ? ' yours' : ''}">${yours ? 'YOU ARE ON THE CLOCK' : `${esc(teamName(onClock(d)))} on the clock`}</p><p class="note small">Round ${round} of ${d.rounds} · pick ${i + 1} of ${totalPicks(d)}</p>`;
   const lottery = !founding && d.lottery.length ? `<h3 class="pc-h">THE LOTTERY</h3><ol class="lead-list past-list">${[...d.lottery].sort((a, b) => a[1] - b[1]).map(([id, at], k) => `<li class="${id === userTeam ? 'mine' : ''}"><span class="rank">${at}</span><span class="nm">${esc(teamName(id))}</span><span class="val">${k < 6 ? 'won a top-6 pick' : ''}</span></li>`).join('')}</ol>` : '';
-  const recent = [...d.picks].slice(-10).reverse().map((x) => `<li class="${x.teamId === userTeam ? 'mine' : ''}"><span class="rank">${x.overall}</span><span class="nm">${esc(teamName(x.teamId))}: ${esc(x.name)} <span class="muted">${x.pos}, ${x.age}</span><span class="d-why">${esc(x.reason)}</span></span></li>`).join('');
+  const recent = [...d.picks].slice(-10).reverse().map((x) => `<li class="${x.teamId === userTeam ? 'mine' : ''}"><span class="rank">${x.overall}</span><span class="nm">${esc(teamName(x.teamId))}: ${link(x.name, 'player', { id: x.playerId })} <span class="muted">${x.pos}, ${x.age}</span><span class="d-why">${esc(x.reason)}</span></span></li>`).join('');
   const mine = d.picks.filter((x) => x.teamId === userTeam);
   let needs = '';
   if (founding) {
@@ -51,7 +51,7 @@ export function draftView(app: App, v: DraftView): string {
   const side = win({ id: 'w-clock', title: founding ? 'Founding Draft' : `Year ${d.year} Draft`, label: founding ? 'BUILD YOUR 40' : 'TEN ROUNDS · RIGHTS FOR FOUR YEARS', cls: 'w-clock',
     body: `${clock}<div class="row-actions">${done(d) ? btn('CONTINUE', 'draft-finish', { kind: 'primary', icon: 'ball' }) : btn(founding ? 'AUTO THE REST' : 'AUTO THE REST OF MY PICKS', 'draft-auto', { title: 'The AI picks for you from here, then the draft finishes' })}</div>
 ${needs}${lottery}<h3 class="pc-h">LATEST PICKS</h3><ol class="lead-list draft-recent">${recent || '<li><span class="nm muted">No picks yet</span></li>'}</ol>
-${mine.length ? `<h3 class="pc-h">YOUR PICKS</h3><ol class="lead-list draft-recent">${mine.map((x) => `<li class="mine"><span class="rank">${x.overall}</span><span class="nm">${esc(x.name)} <span class="muted">${x.pos}, ${x.age} · ceiling ${x.lo}–${x.hi}</span></span></li>`).join('')}</ol>` : ''}` });
+${mine.length ? `<h3 class="pc-h">YOUR PICKS</h3><ol class="lead-list draft-recent">${mine.map((x) => `<li class="mine"><span class="rank">${x.overall}</span><span class="nm">${link(x.name, 'player', { id: x.playerId })} <span class="muted">${x.pos}, ${x.age} · ceiling ${x.lo}–${x.hi}</span></span></li>`).join('')}</ol>` : ''}` });
   return `<div class="frame screen-page screen-draft">${banner(founding ? 'THE FOUNDING DRAFT' : `THE YEAR ${d.year} DRAFT`, founding ? `${esc(teamName(userTeam)).toUpperCase()} · 40 ROUNDS · SNAKE ORDER` : `${esc(teamName(userTeam)).toUpperCase()} · 10 ROUNDS · LOTTERY FOR PICKS 1–6`)}
 <main class="main page" id="main" data-scroll="draft"><div class="draft-layout">${boardWin}${side}</div></main></div>`;
 }

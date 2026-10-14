@@ -86,7 +86,7 @@ function gameLog(app: App, f: Frame): string {
       key = l.key;
       html += `<div class="log-half">${halfLabel(l.inning, l.half).toUpperCase()} — ${esc(teamName(rp.result.teamIds[l.half])).toUpperCase()}</div>`;
     }
-    html += `<p class="log-line${l.runs ? ' scored' : ''}${l.kind === 'change' ? ' change' : ''}">${esc(l.text)}${l.runs ? ` <span class="log-score">${l.score[0]}-${l.score[1]}</span>` : ''}</p>`;
+    html += `<p class="log-line ${l.tone ?? ''}${l.runs ? ' scored' : ''}${l.kind === 'change' ? ' change' : ''}">${esc(l.text)}${l.runs ? ` <span class="log-score">${l.score[0]}-${l.score[1]}</span>` : ''}</p>`;
   }
   if (f.kind === 'up' || f.kind === 'pitch') {
     const fk = f.inning * 2 + f.half;

@@ -9,7 +9,7 @@ import { projection } from '../../engine/draft';
 import type { App } from '../app';
 import { dateLabel, shortDate } from '../calendar';
 import type { Game } from '../state';
-import { BAT_CATS, PIT_CATS, avg, era, era2, gbText, heat, ip, last10, leaders, obp, pct, races, rate3, slg, streakText, whip } from '../stats';
+import { BAT_CATS, LOG_KEY, PIT_CATS, diffTone, last10Tone, playTone, recordTone, streakTone, avg, era, era2, gbText, heat, ip, last10, leaders, obp, pct, races, rate3, slg, streakText, whip } from '../stats';
 import { bracketHtml, findSeries, FINAL_NAME, seriesShort } from '../post';
 import { DIVISIONS, LEAGUES, teamName } from '../teams';
 import { bannerFor, simActions } from './home';
@@ -29,8 +29,8 @@ export function standingsView(app: App): string {
     const divs = race.divisions.map((d) => {
       const rows = d.rows.map((r) => {
         const diff = r.RS - r.RA;
-        return trow([link(teamName(r.teamId), 'team', { id: r.teamId }), String(r.W), String(r.L), rate3(pct(r)), gbText(r.gb), last10(r), streakText(r),
-          `<span class="x">${r.RS}</span>`, `<span class="x">${r.RA}</span>`, `<span class="x">${diff > 0 ? '+' + diff : diff}</span>`,
+        return trow([link(teamName(r.teamId), 'team', { id: r.teamId }), recordTone(r, String(r.W)), recordTone(r, String(r.L)), recordTone(r, rate3(pct(r))), gbText(r.gb), last10Tone(r), streakTone(r),
+          `<span class="x">${r.RS}</span>`, `<span class="x">${r.RA}</span>`, `<span class="x">${diffTone(r)}</span>`,
           `<span class="x">${r.homeW}-${r.homeL}</span>`, `<span class="x">${r.awayW}-${r.awayL}</span>`], heat(r), r.teamId === g.userTeam);
       }).join('');
       return win({ id: `w-st-${race.league}-${d.division}`, title: DIVISIONS[d.division], label: LEAGUES[race.league].toUpperCase(), body: `<div class="hscroll">${ttable(cols, `${LEAGUES[race.league]} ${DIVISIONS[d.division]}`, head + rows).replace('class="ttable"', 'class="ttable full"')}</div>` });
@@ -38,7 +38,7 @@ export function standingsView(app: App): string {
     let wc = '';
     race.wildCard.forEach((w, i) => {
       const gb = i < 2 ? (w.gb === 0 ? '—' : `+${(-w.gb).toFixed(1)}`) : gbText(w.gb);
-      wc += trow([link(teamName(w.row.teamId), 'team', { id: w.row.teamId }), String(w.row.W), String(w.row.L), rate3(pct(w.row)), gb, last10(w.row), streakText(w.row)], heat(w.row), w.row.teamId === g.userTeam);
+      wc += trow([link(teamName(w.row.teamId), 'team', { id: w.row.teamId }), recordTone(w.row, String(w.row.W)), recordTone(w.row, String(w.row.L)), recordTone(w.row, rate3(pct(w.row))), gb, last10Tone(w.row), streakTone(w.row)], heat(w.row), w.row.teamId === g.userTeam);
       if (i === 1) wc += '<div class="playoff-line" role="presentation">PLAYOFF LINE</div>';
     });
     const seeds = race.divisions.map((d) => d.rows[0]).sort((a, b) => pct(b) - pct(a));
@@ -274,14 +274,15 @@ export function gameLogView(app: App): string {
     if (!h || h.key !== key) { h = { key, inning: ev.inning, half: ev.half, lines: [], runs: 0 }; halves.push(h); }
     const runs = ev.type === 'pa' ? ev.runs : ev.type === 'wp' ? ev.moves.filter((m) => m.to === 4).length : 0;
     h.runs += runs;
-    h.lines.push(`<p class="log-line${runs ? ' scored' : ''}${ev.type === 'change' ? ' change' : ''}">${esc(eventText(ev, g.name, app.settings.detail))}</p>`);
+    const tone = ev.type === 'pa' ? playTone(ev.play) : ev.type === 'steal' ? (ev.safe ? 't-on' : 't-out') : '';
+    h.lines.push(`<p class="log-line ${tone}${runs ? ' scored' : ''}${ev.type === 'change' ? ' change' : ''}">${esc(eventText(ev, g.name, app.settings.detail))}</p>`);
   }
   const pbp = halves.map((h) => `<details class="half" open><summary>${halfLabel(h.inning, h.half).toUpperCase()} — ${esc(teamName(r.teamIds[h.half])).toUpperCase()} <span class="half-runs">${h.runs} R</span></summary>${h.lines.join('')}</details>`).join('');
   const detail = `<label class="detail-pick"><span class="k">PITCH DETAIL</span><select data-act="set-detail" id="detail-pick"><option value="final"${app.settings.detail === 'final' ? ' selected' : ''}>Summary</option><option value="full"${app.settings.detail === 'full' ? ' selected' : ''}>Full sequences</option><option value="none"${app.settings.detail === 'none' ? ' selected' : ''}>Plays only</option></select></label>`;
   const acts = `<div class="row-actions">${detail}${btn('BOX SCORE', 'go', { icon: 'box', data: { to: 'games', index: app.logPick } })}${btn('REPLAY', 'replay', { icon: 'play', data: { index: app.logPick } })}</div>`;
   const title = `${esc(teamName(r.teamIds[0])).toUpperCase()} ${r.score[0]}, ${esc(teamName(r.teamIds[1])).toUpperCase()} ${r.score[1]}${r.innings > 9 ? ` (${r.innings})` : ''} · ${shortDate(r.day)}`;
   return page(app, 'gamelog', `<div class="games-layout">${win({ id: 'w-glist', title: 'Your Games', label: `${mine.length} PLAYED`, body: `<ul class="glist-list">${list}</ul>`, scroll: true, cls: 'w-scores' })}
-${win({ id: 'w-pbp', title: 'Game Log', label: title, body: acts + pbp, scroll: true, cls: 'w-boxscore' })}</div>`);
+${win({ id: 'w-pbp', title: 'Game Log', label: title, body: acts + LOG_KEY + pbp, scroll: true, cls: 'w-boxscore' })}</div>`);
 }
 
 // ------------------------------------------------------------------ news

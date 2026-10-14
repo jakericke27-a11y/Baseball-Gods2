@@ -3,6 +3,7 @@
  * pitch, the play, steals, wild pitches and pitching changes. The game is already decided; watching
  * it is a faithful replay, pitch for pitch.
  */
+import { playTone } from './stats';
 import { Loc, PitchResult, pitchLocOf, pitchResultOf } from '../engine/atbat/codes';
 import {
   applyMoves, countBefore, decodeEvents, eventText, halfLabel, outsOnPlay, type PaEvent, type PitchDetail, type WildPitchEvent,
@@ -26,7 +27,7 @@ export interface Frame {
   stinger?: 'homer' | 'walkoff';
 }
 
-export interface LogLine { key: number; inning: number; half: 0 | 1; text: string; runs: number; score: [number, number]; kind: 'pa' | 'steal' | 'wp' | 'change' }
+export interface LogLine { key: number; inning: number; half: 0 | 1; text: string; runs: number; score: [number, number]; kind: 'pa' | 'steal' | 'wp' | 'change'; /** CSS tone for the play (stats.ts playTone). */ tone?: string }
 
 export interface Replay { result: GameResult; frames: Frame[]; log: LogLine[] }
 
@@ -68,8 +69,8 @@ export function buildReplay(
       today: todayText(batter), ...extra,
     });
   };
-  const addLog = (kind: LogLine['kind'], text: string, runs: number) =>
-    log.push({ key: st.key, inning: st.inning, half: st.half, text, runs, score: [st.score[0], st.score[1]], kind });
+  const addLog = (kind: LogLine['kind'], text: string, runs: number, tone = '') =>
+    log.push({ key: st.key, inning: st.inning, half: st.half, text, runs, score: [st.score[0], st.score[1]], kind, tone });
   const score = (runs: number) => {
     st.score[st.half] += runs;
     st.line[st.half][st.inning - 1] += runs;
@@ -108,7 +109,7 @@ export function buildReplay(
     if (ev.type === 'steal') {
       st.bases &= ~(1 << (ev.base - 2));
       if (ev.safe) st.bases |= 1 << (ev.base - 1); else st.outs++;
-      addLog('steal', eventText(ev, name, detail), 0);
+      addLog('steal', eventText(ev, name, detail), 0, ev.safe ? 't-on' : 't-out');
       snap('event', eventText(ev, name, 'final'), toneFor(ev.safe));
       continue;
     }
@@ -154,7 +155,7 @@ export function buildReplay(
       if (isHit(pa.play)) st.hits[pa.half]++;
       if (pa.play === Play.ReachedOnError) st.errors[1 - pa.half]++;
       const text = eventText(pa, name, 'final');
-      addLog('pa', eventText(pa, name, detail), pa.runs);
+      addLog('pa', eventText(pa, name, detail), pa.runs, playTone(pa.play));
       const lastEvent = i === events.length - 1;
       const walkoff = lastEvent && pa.half === 1 && st.score[1] > st.score[0];
       const tone: Tone = pa.play === Play.HomeRun || walkoff ? 'big' : toneFor(isHit(pa.play) || pa.runs > 0 || pa.play === Play.Walk || pa.play === Play.HitByPitch);

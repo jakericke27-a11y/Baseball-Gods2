@@ -64,6 +64,8 @@ export class App {
   /** The founding draft in progress (no league to play yet). */
   founding: { seed: number; team: number; league: League; draft: DraftState; byHand: boolean } | null = null;
   draftFilter: 'all' | 'bats' | 'arms' = 'all';
+  /** The winter report: your team or the whole league. */
+  offScope: 'team' | 'league' = 'team';
   /** Hot and cold: the window in days. */
   formDays: 7 | 14 | 30 = 14;
   /** A player whose RELEASE was pressed once (the second press confirms). */
@@ -674,6 +676,7 @@ export class App {
       }
       case 'games-pick': this.gamesPick = Number(d.index); this.render(); return;
       case 'log-pick': this.logPick = Number(d.index); this.render(); return;
+      case 'off-scope': this.offScope = d.scope as App['offScope']; this.render(); return;
       case 'form-days': this.formDays = Number(d.days) as App['formDays']; this.render(); return;
       case 'news': if (g) { this.screen = 'news'; this.render(); } return;
       case 'roster-tab': this.rosterTab = d.tab as App['rosterTab']; this.releaseArmed = 0; this.render(); return;

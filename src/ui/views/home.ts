@@ -6,7 +6,7 @@ import { formatStart } from '../../engine/season/schedule';
 import type { App } from '../app';
 import { dateLabel, weekOf, weekdayShort } from '../calendar';
 import type { Game } from '../state';
-import { era, era2, gbText, heat, last10, leaders, raceText, races, streakText } from '../stats';
+import { diffTone, era, era2, gbText, heat, last10Tone, leaders, raceText, races, recordTone, streakTone } from '../stats';
 import { oddsText, playoffPicture } from '../races';
 import { FINAL_NAME, bracketHtml, findSeries, postText, seriesShort } from '../post';
 import { DIVISIONS, LEAGUES, teamName } from '../teams';
@@ -70,7 +70,7 @@ function yourTeam(g: Game): string {
   }
   const kv = (k: string, v: string) => `<div class="kv"><div class="k">${k}</div><div class="v">${v}</div></div>`;
   const body = `<div class="yt-record"><span class="big-num">${me.W}-${me.L}</span><span class="yt-place">${placeTxt} in ${LEAGUES[t.conference]} ${DIVISIONS[t.division]}</span></div>
-<div class="kv-row">${kv('RUN DIFF', diff > 0 ? `+${diff}` : String(diff))}${kv('STREAK', streakText(me))}${kv('LAST 10', last10(me))}</div>
+<div class="kv-row">${kv('RUN DIFF', diffTone(me))}${kv('STREAK', streakTone(me))}${kv('LAST 10', last10Tone(me))}</div>
 <div class="yt-race">${esc(postText(g, g.userTeam) || [raceText(g, g.userTeam), me.W + me.L ? oddsText(playoffPicture(g).find((x) => x.teamId === g.userTeam)!) : ''].filter(Boolean).join(' · '))}</div>${lastLine}`;
   return win({ id: 'w-yours', title: 'Your Team', label: teamName(g.userTeam).toUpperCase(), body, open: 'roster', openData: { team: g.userTeam }, cls: 'w-yours' });
 }
@@ -79,7 +79,7 @@ function divisionWindow(g: Game): string {
   const t = g.league.teams.find((x) => x.id === g.userTeam)!;
   const div = races(g)[t.conference].divisions.find((d) => d.division === t.division)!;
   const cols = 'minmax(0, 1fr) 32px 32px 44px 40px 36px';
-  const rows = div.rows.map((r) => trow([link(teamName(r.teamId), 'team', { id: r.teamId }), String(r.W), String(r.L), gbText(r.gb), last10(r), streakText(r)], heat(r), r.teamId === g.userTeam)).join('');
+  const rows = div.rows.map((r) => trow([link(teamName(r.teamId), 'team', { id: r.teamId }), recordTone(r, String(r.W)), recordTone(r, String(r.L)), gbText(r.gb), last10Tone(r), streakTone(r)], heat(r), r.teamId === g.userTeam)).join('');
   return win({
     id: 'w-div', title: 'Standings', label: `${LEAGUES[t.conference]} ${DIVISIONS[t.division]}`.toUpperCase(), open: 'standings',
     body: ttable(cols, 'Division standings', thead(['TEAM', 'W', 'L', 'GB', 'L10', 'STK']) + rows), scroll: true, cls: 'w-div',
@@ -136,7 +136,7 @@ function wildCard(g: Game): string {
   let rows = '';
   race.wildCard.forEach((w, i) => {
     const gb = i < 2 ? (w.gb === 0 ? '—' : `+${(-w.gb).toFixed(1)}`) : gbText(w.gb);
-    rows += trow([link(teamName(w.row.teamId), 'team', { id: w.row.teamId }), String(w.row.W), String(w.row.L), gb], heat(w.row), w.row.teamId === g.userTeam);
+    rows += trow([link(teamName(w.row.teamId), 'team', { id: w.row.teamId }), recordTone(w.row, String(w.row.W)), recordTone(w.row, String(w.row.L)), gb], heat(w.row), w.row.teamId === g.userTeam);
     if (i === 1) rows += '<div class="playoff-line" role="presentation">PLAYOFF LINE</div>';
   });
   return win({

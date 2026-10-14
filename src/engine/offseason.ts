@@ -50,6 +50,8 @@ export interface OffseasonReport {
   newClass: number;
   /** Prospects who joined a 40-man roster. */
   promotions: OffseasonMove[];
+  /** Your prospects kept on the 40 just before their rights ran out (AUTO ROSTER off). */
+  kept: OffseasonMove[];
   /** The draft, in a draft winter (every pick). */
   draft: DraftPick[];
   /** The Gods' decree for the coming year (from Year 2). */
@@ -67,7 +69,7 @@ export function runOffseason(league: League, year: number, rng: Rng, worstFirst:
 
 /** The first half of the winter: aging and development, retirements, the amateur pipeline. */
 export function winterBefore(league: League, year: number, rng: Rng): OffseasonReport {
-  const report: OffseasonReport = { year, retirements: [], signings: [], releases: [], risers: [], fallers: [], newClass: 0, promotions: [], draft: [] };
+  const report: OffseasonReport = { year, retirements: [], signings: [], releases: [], risers: [], fallers: [], newClass: 0, promotions: [], kept: [], draft: [] };
   const teamOf = new Map<number, Team>();
   for (const t of league.teams) for (const id of t.playerIds) teamOf.set(id, t);
   const byId = new Map(league.players.map((p) => [p.id, p]));
@@ -124,23 +126,7 @@ export function winterAfter(league: League, report: OffseasonReport, worstFirst:
   for (const t of order) {
     if (t.id === userTeam && t.auto && !t.auto.roster) continue;
     const mine = league.prospects.filter((x) => x.teamId === t.id && x.player.age >= PROSPECT_READY_AGE).sort((a, b) => playerValue(b.player) - playerValue(a.player) || a.overall - b.overall);
-    for (const pr of mine) {
-      const p = pr.player, kind = (q: Player) => (q.position === 'P') === (p.position === 'P');
-      const group = t.playerIds.map((id) => byId.get(id)!).filter(kind);
-      const cap = p.position === 'P' ? ROSTER.pitchers : ROSTER.hitters;
-      const worst = group.reduce<Player | null>((w, q) => (!w || playerValue(q) < playerValue(w) ? q : w), null);
-      if (group.length >= cap) {
-        if (!worst || playerValue(p) < playerValue(worst) + ROSTER.upgradeMargin) continue;
-        t.playerIds.splice(t.playerIds.indexOf(worst.id), 1);
-        league.players.splice(league.players.indexOf(worst), 1);
-        byId.delete(worst.id);
-        league.freeAgents.push(worst);
-        report.releases.push(move(worst, t.id));
-      } else if (playerValue(p) < (worst ? playerValue(worst) - 6 : 0)) continue; // not ready to beat what's there yet
-      promote(league, t, pr);
-      byId.set(p.id, p);
-      report.promotions.push(move(p, t.id));
-    }
+    for (const pr of mine) if (tryPromote(league, t, pr, byId, report)) report.promotions.push(move(pr.player, t.id));
   }
   const sign = (t: Team, p: Player) => {
     league.freeAgents.splice(league.freeAgents.indexOf(p), 1);
@@ -185,6 +171,40 @@ export function winterAfter(league: League, report: OffseasonReport, worstFirst:
   }
 }
 
+/**
+ * Promote a prospect if he'd help: into an open spot if he's close to the worst of his kind, or in place of the worst
+ * if he beats him by the upgrade margin (that player is released). The rule AUTO uses every winter.
+ */
+function tryPromote(league: League, t: Team, pr: Prospect, byId: Map<number, Player>, report: OffseasonReport): boolean {
+  const p = pr.player, kind = (q: Player) => (q.position === 'P') === (p.position === 'P');
+  const group = t.playerIds.map((id) => byId.get(id)!).filter(kind);
+  const cap = p.position === 'P' ? ROSTER.pitchers : ROSTER.hitters;
+  const worst = group.reduce<Player | null>((w, q) => (!w || playerValue(q) < playerValue(w) ? q : w), null);
+  if (group.length >= cap) {
+    if (!worst || playerValue(p) < playerValue(worst) + ROSTER.upgradeMargin) return false;
+    t.playerIds.splice(t.playerIds.indexOf(worst.id), 1);
+    league.players.splice(league.players.indexOf(worst), 1);
+    byId.delete(worst.id);
+    league.freeAgents.push(worst);
+    report.releases.push(move(worst, t.id));
+  } else if (playerValue(p) < (worst ? playerValue(worst) - 6 : 0)) return false; // not ready to beat what's there yet
+  promote(league, t, pr);
+  byId.set(p.id, p);
+  return true;
+}
+
+/**
+ * Your prospects whose rights run out this winter: with AUTO ROSTER off nothing promotes them, so before they're lost
+ * the AUTO rule gets one look at each (any age). Whoever it would keep joins your 40; the report lists them.
+ */
+export function keepExpiring(league: League, userTeam: number, year: number, report: OffseasonReport): void {
+  const t = league.teams.find((x) => x.id === userTeam);
+  if (!t || !t.auto || t.auto.roster) return; // on AUTO the usual promotions already ran
+  const byId = new Map(league.players.map((p) => [p.id, p]));
+  const expiring = league.prospects.filter((x) => x.teamId === userTeam && x.until <= year).sort((a, b) => playerValue(b.player) - playerValue(a.player));
+  for (const pr of expiring) if (tryPromote(league, t, pr, byId, report)) report.kept.push(move(pr.player, t.id));
+}
+
 /** Prospects don't help a big-league roster before this age. */
 export const PROSPECT_READY_AGE = 20;
 
@@ -218,6 +238,7 @@ export function beginWinter(prev: Season): Winter {
   report.decree = decreeWinter(L, prev.year, createRng(yearSeed(L.seed, prev.year + 1) ^ 0x60d5));
   let draft: DraftState | null = null;
   if (isDraftYear(prev.year)) {
+    keepExpiring(L, prev.userTeam, prev.year, report);
     expireRights(L, prev.year);
     draft = cycleDraft(L, prev.year, prev.rng);
   }
