@@ -10,7 +10,7 @@ import { BASELINE_ENVIRONMENT } from './atbat/environment';
 import type { AtBatParams } from './atbat/params';
 import { seedPipeline } from './generate';
 import { setAllActive } from './roster';
-import type { BatLine, BullpenRole, GameMoment, GameResult, PitchLine } from './game/types';
+import type { BatLine, BullpenRole, GameMoment, GameResult, PitchLine, Sub } from './game/types';
 import { createRng, type RngState } from './rng';
 import type { Postseason } from './season/postseason';
 import type { Schedule, ScheduledGame } from './season/schedule';
@@ -18,7 +18,7 @@ import type { Season, StandingRow } from './season/season';
 import type { TeamPlan } from './season/teams';
 import type { League, TeamStrategy } from './types';
 
-export const SNAPSHOT_VERSION = 8;
+export const SNAPSHOT_VERSION = 9;
 
 type Entries<V> = Array<[number, V]>;
 
@@ -34,6 +34,8 @@ export interface ResultSnap {
   /** Index into the snapshot's log list, or -1 when the game kept no log. */
   log: number;
   kind?: 'tiebreak' | 'post'; series?: string; game?: number;
+  /** v9: substitutions (live games). */
+  subs?: Sub[];
 }
 
 export interface SeasonSnap {
@@ -79,6 +81,7 @@ export function snapshotSeason(s: Season): { data: SeasonSnap; logs: Uint8Array[
       lineups: [g.lineups[0].map((l) => [l.player.id, l.pos]), g.lineups[1].map((l) => [l.player.id, l.pos])],
       pitchersUsed: g.pitchersUsed, decisions: g.decisions, budgets: ents(g.budgets), pitchResults: g.pitchResults, moments: g.moments, log,
       ...(g.kind ? { kind: g.kind } : {}), ...(g.series ? { series: g.series, game: g.game } : {}),
+      ...(g.subs ? { subs: g.subs } : {}),
     };
   });
   const data: SeasonSnap = {
@@ -125,6 +128,8 @@ const UPGRADES: Record<number, (s: SeasonSnap) => SeasonSnap> = {
   6: (s) => { const L = s.league as Partial<League> & League; L.env ??= { ...BASELINE_ENVIRONMENT }; L.modifiers ??= []; return { ...s, v: 7 }; },
   // v7 → v8: your draft board (starts empty).
   7: (s) => { const L = s.league as Partial<League> & League; L.wishlist ??= []; return { ...s, v: 8 }; },
+  // v8 → v9: games can carry substitutions (live games); older games had none.
+  8: (s) => ({ ...s, v: 9 }),
 };
 
 export function upgradeSnapshot(s: SeasonSnap): SeasonSnap {
@@ -157,6 +162,7 @@ export function restoreSeason(snap: SeasonSnap, logs: Uint8Array[]): Season {
     pitchersUsed: r.pitchersUsed, decisions: r.decisions, budgets: new Map(r.budgets), pitchResults: r.pitchResults, moments: r.moments,
     log: r.log >= 0 ? logs[r.log] ?? null : null,
     ...(r.kind ? { kind: r.kind } : {}), ...(r.series ? { series: r.series, game: r.game } : {}),
+    ...(r.subs ? { subs: r.subs } : {}),
   }));
   return {
     year: d.year, league, players, params: d.params, rng: createRng(0, d.rng), schedule, day: d.day, plans,

@@ -152,6 +152,8 @@ function settingsModal(app: App): string {
   const body = `<div class="set-group"><h3>DISPLAY</h3>
 <label class="toggle"><input type="checkbox" id="set-readable" data-act="set-readable"${s.readable ? ' checked' : ''}><span>Readable text (swap the pixel fonts for a plain one)</span></label>
 <label class="field"><span class="k">PLAY-BY-PLAY DETAIL</span><select id="set-detail" data-act="set-detail"><option value="final"${s.detail === 'final' ? ' selected' : ''}>Summary: counts on homers, long at-bats noted</option><option value="full"${s.detail === 'full' ? ' selected' : ''}>Full: every pitch of long at-bats</option><option value="none"${s.detail === 'none' ? ' selected' : ''}>Plays only</option></select></label></div>
+<div class="set-group"><h3>LIVE GAMES</h3>
+<label class="field"><span class="k">YOUR MOVES WHEN YOU WATCH</span><select id="set-manager" data-act="set-manager"><option value="ask"${s.manager === 'ask' ? ' selected' : ''}>Ask me first: the bench coach asks before he makes a move, and the game stops at big moments</option><option value="me"${s.manager === 'me' ? ' selected' : ''}>All mine: nothing moves unless I do; the game waits when a decision is due</option><option value="ai"${s.manager === 'ai' ? ' selected' : ''}>Bench coach: he decides and play flows on; I can still step in</option></select></label></div>
 <div class="set-group"><h3>MUSIC</h3>
 <label class="toggle"><input type="checkbox" id="set-music" data-act="set-music"${s.music ? ' checked' : ''}><span>Music on</span></label>
 <label class="field"><span class="k">VOLUME</span><input type="range" id="set-volume" min="0" max="100" value="${Math.round(s.volume * 100)}" data-act="set-volume"></label>

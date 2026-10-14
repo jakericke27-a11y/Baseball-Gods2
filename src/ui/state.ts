@@ -7,10 +7,10 @@ import { DEFAULT_PARAMS } from '../engine/atbat/params';
 import { applyEnvironment, type LeagueEnvironment } from '../engine/atbat/environment';
 import { generateLeague } from '../engine/generate';
 import { ordinal } from '../engine/game/text';
-import { Moment, type BullpenRole, type GameResult } from '../engine/game/types';
+import { Moment, type BullpenRole, type GameMove, type GameResult } from '../engine/game/types';
 import { beginWinter, finishWinter, type OffseasonReport, type Winter } from '../engine/offseason';
 import { refreshPlan } from '../engine/roster';
-import { createSeason, isOver, simDay, type Season } from '../engine/season/season';
+import { createSeason, isOver, liveStep, simDay, startLiveDay, type LiveDay, type Season } from '../engine/season/season';
 import type { League, Player } from '../engine/types';
 import { postHeadlines } from './post';
 import { raceHeadlines, raceStatus } from './races';
@@ -42,6 +42,8 @@ export class Game {
   streaks: StreakBook = newStreakBook();
   /** You made founding-draft picks yourself (then the Year 1 password, which replays an auto-drafted league, can't help). */
   draftedByHand = false;
+  /** You made a move in a live game that the bench coach wouldn't have (then the Year 1 password can't replay the year). */
+  movedByHand = false;
 
   /** A new league, or (with `season`) one restored from a save. */
   constructor(seed: number, userTeam: number, league?: League, season?: Season) {
@@ -150,12 +152,59 @@ export class Game {
     const day = this.season.day;
     const before = raceStatus(this);
     const results = simDay(this.season);
+    this.afterDay(day, results, before);
+    return results;
+  }
+
+  private afterDay(day: number, results: GameResult[], before: ReturnType<typeof raceStatus>): void {
     const start = this.season.results.length - results.length;
     if (results.length) this.byDay.set(day, results.map((_, i) => start + i));
     this.addHeadlines(day, results);
     this.headlines.push(...postHeadlines(this, day, results));
     this.headlines.push(...raceHeadlines(this, day, results, before, catchUpStreaks(this.streaks, this.season.results)));
-    return results;
+  }
+
+  // ---------------------------------------------------------------- your game, live
+
+  /** Today, with your game played live (the rest of the day sims around it). Null if you're off today. */
+  live: { day: LiveDay; date: number; before: ReturnType<typeof raceStatus> } | null = null;
+
+  startLive(): boolean {
+    if (this.live || this.over) return !!this.live;
+    const date = this.season.day, before = raceStatus(this);
+    const day = startLiveDay(this.season, this.userTeam);
+    if (!day) return false;
+    this.live = { day, date, before };
+    if (!day.call) this.endLive();
+    return true;
+  }
+  /** Your side in the live game (0 away, 1 home). */
+  get liveSide(): number { const d = this.live?.day; return d ? (d.setups[0].teamId === this.userTeam ? 0 : 1) : 0; }
+  /** A move takes effect now; the game waits for you again. */
+  liveMove(m: GameMove): void {
+    const c = this.live?.day.call;
+    if (!c) return;
+    if (!(m.kind === 'pitcher' && c.aiPitch[m.side] === m.id)) this.movedByHand = true; // saying yes to the bench coach changes nothing
+    liveStep(this.live!.day, [m]);
+  }
+  /** Play on to the next decision point. Returns your finished game when it ends. */
+  liveAdvance(): GameResult | null {
+    if (!this.live) return null;
+    const res = liveStep(this.live.day, []);
+    if (res || !this.live.day.call) return this.endLive();
+    return null;
+  }
+  /** Let the AI finish your game (leaving early). */
+  liveFinish(): GameResult | null {
+    let res: GameResult | null = null;
+    while (this.live && !res) res = this.liveAdvance();
+    return res;
+  }
+  private endLive(): GameResult | null {
+    const l = this.live!;
+    this.live = null;
+    this.afterDay(l.date, l.day.results, l.before);
+    return l.day.results.find((r) => r.teamIds.includes(this.userTeam)) ?? null;
   }
 
   /** The next day (from today) with at least one game, or -1. */

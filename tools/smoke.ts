@@ -52,20 +52,30 @@ async function main() {
   let tries = 0;
   while (!doc.querySelector('[data-act="watch"]') && tries++ < 10) await click('[data-act="sim-day"]');
   await click('[data-act="watch"]');
-  ok(app().screen === 'watch', 'watch opens the game view');
-  const frames = app().watch.replay.frames.length;
-  ok(frames > 200, `replay has ${frames} frames`);
+  ok(app().screen === 'watch' && app().watch.live && app().game.live, 'WATCH plays your game live');
+  ok(app().watch.replay.frames.length === 2 && doc.querySelector('#w-mgr-t'), 'it waits at the first batter, with the manager panel');
   const calls = new Set<string>();
   for (let i = 0; i < 8; i++) { await click('[data-act="w-pitch"]'); calls.add(text('.call')); }
-  ok(calls.size >= 3, `stepping pitch by pitch changes the call (${[...calls].slice(0, 4).join(' | ')})`);
+  ok(calls.size >= 3, `stepping pitch by pitch plays on and changes the call (${[...calls].slice(0, 4).join(' | ')})`);
   await click('[data-act="w-ab"]');
   ok(app().watch.replay.frames[app().watch.at].kind === 'result', 'next at-bat lands on a result');
+  // play until you're at bat, answering the bench coach along the way
+  const answer = async () => {
+    if (doc.querySelector('[data-act="live-ok"]')) await click('[data-act="live-ok"]');
+    else if (doc.querySelector('[data-act="live-keep"]')) await click('[data-act="live-keep"]');
+    else if (doc.querySelector('[data-act="live-go"]')) await click('[data-act="live-go"]');
+  };
+  let guard = 0;
+  while (app().watch.live && !doc.querySelector('[data-act="live-ph"]') && guard++ < 400) { await answer(); await click('[data-act="w-pitch"]'); }
+  ok(doc.querySelector('[data-act="live-ph"]'), 'at bat: pinch hitters on offer (used in Year 2: Year 1 stays replayable from its password)');
   await click('[data-act="w-inning"]');
   doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
   await sleep(5);
   ok(doc.querySelectorAll('.w-log .log-line').length > 3, 'game log fills in');
-  await click('[data-act="w-end"]');
-  ok(text('.call').startsWith('Final'), `ends on the final: "${text('.call')}"`);
+  guard = 0;
+  while (app().watch.live && guard++ < 200) { await click('[data-act="w-end"]'); await answer(); }
+  ok(!app().game.live && text('.call').startsWith('Final'), `to the end, answering when asked: "${text('.call')}"`);
+  ok(!app().game.movedByHand && app().password() !== '', 'a live game where you only said yes to the bench coach keeps the Year 1 password');
   const r = app().watch.replay.result;
   const last = app().watch.replay.frames.at(-1);
   ok(last.score[0] === r.score[0] && last.score[1] === r.score[1], 'replayed score matches the box score');
@@ -176,6 +186,27 @@ async function main() {
   await click('[data-act="sim-week"]');
   ok(app().game.season.results.length > 0 && app().game.year === 2, 'Year 2 plays');
   ok(app().game.league.teams.every((t: any) => t.playerIds.length === 40), 'every team has a full 40-man roster');
+  // Year 2: a live game with a pinch hitter
+  await app().act('go', { to: 'home' }); await settle();
+  let tries2 = 0;
+  while (!doc.querySelector('[data-act="watch"]') && tries2++ < 10) await click('[data-act="sim-day"]');
+  await click('[data-act="watch"]');
+  const answer2 = async () => {
+    if (doc.querySelector('[data-act="live-ok"]')) await click('[data-act="live-ok"]');
+    else if (doc.querySelector('[data-act="live-go"]')) await click('[data-act="live-go"]');
+  };
+  let guard2 = 0;
+  while (app().watch.live && !doc.querySelector('[data-act="live-ph"]') && guard2++ < 400) { await answer2(); await click('[data-act="w-pitch"]'); }
+  const ph = Number((q('#live-ph-sel') as HTMLSelectElement).value);
+  await click('[data-act="live-ph"]');
+  ok(app().game.live.day.call.batter === ph && text('.call').includes(app().game.name(ph)), 'a pinch hitter steps in at once');
+  ok([...doc.querySelectorAll('.w-log .log-line')].some((e) => e.textContent!.startsWith('Pinch hitter')), 'and the log says so');
+  ok(app().game.movedByHand, 'a move of your own marks the year (no password replay)');
+  guard2 = 0;
+  while (app().watch.live && guard2++ < 200) { await click('[data-act="w-end"]'); await answer2(); }
+  ok(app().game.season.results[app().watch.index].subs?.some((x: any) => x.incoming === ph), 'the box score remembers the pinch hitter');
+  await click('[data-act="w-box"]');
+  ok([...doc.querySelectorAll('.box-sub')].some((e) => e.textContent!.includes('PH')), 'the box lists him under the man he batted for');
   await app().act('go', { to: 'leaders' }); await settle();
   await click('[data-act="lead"][data-k="when"][data-v="alltime"]');
   ok(doc.querySelector('#w-l-HR-t') && doc.querySelector('#w-l-AVG-t'), 'all-time leaders from Year 1, rate leaders qualified');

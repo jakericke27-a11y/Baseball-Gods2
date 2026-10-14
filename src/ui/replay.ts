@@ -8,7 +8,7 @@ import { Loc, PitchResult, pitchLocOf, pitchResultOf } from '../engine/atbat/cod
 import {
   applyMoves, countBefore, decodeEvents, eventText, halfLabel, outsOnPlay, type PaEvent, type PitchDetail, type WildPitchEvent,
 } from '../engine/game/text';
-import { Play, type GameResult } from '../engine/game/types';
+import { Play, type GameCall, type GameResult } from '../engine/game/types';
 
 export type FrameKind = 'start' | 'up' | 'pitch' | 'result' | 'event' | 'final';
 export type Tone = 'plain' | 'good' | 'bad' | 'big';
@@ -37,8 +37,12 @@ export const LOC_WORD = ['Middle', 'Corner', 'Off the plate'];
 const isHit = (p: Play) => p >= Play.Single && p <= Play.HomeRun;
 const isAtBat = (p: Play) => p !== Play.Walk && p !== Play.HitByPitch && p !== Play.SacFly;
 
+/**
+ * `live`: the game is still being played; the frames end with the next batter stepping in (the decision point the
+ * game is waiting at) instead of the final.
+ */
 export function buildReplay(
-  r: GameResult, name: (id: number) => string, teamLabel: (id: number) => string, detail: PitchDetail, userTeam = 0,
+  r: GameResult, name: (id: number) => string, teamLabel: (id: number) => string, detail: PitchDetail, userTeam = 0, live?: GameCall,
 ): Replay {
   const events = decodeEvents(r.log!);
   const frames: Frame[] = [];
@@ -53,7 +57,7 @@ export function buildReplay(
   const today = new Map<number, { ab: number; h: number; bb: number; pa: number }>();
   const userBats = (half: number) => (userTeam ? r.teamIds[half] === userTeam : null);
   const firstPa = events.find((e): e is PaEvent => e.type === 'pa');
-  let batter = firstPa?.batter ?? 0;
+  let batter = firstPa?.batter ?? live?.batter ?? 0;
 
   const todayText = (id: number) => {
     const t = today.get(id);
@@ -102,6 +106,11 @@ export function buildReplay(
     }
     if (ev.type === 'change') {
       pitcherOf[ev.half] = ev.incoming;
+      addLog('change', eventText(ev, name, detail), 0);
+      snap('event', eventText(ev, name, 'final'), 'plain');
+      continue;
+    }
+    if (ev.type === 'sub') {
       addLog('change', eventText(ev, name, detail), 0);
       snap('event', eventText(ev, name, 'final'), 'plain');
       continue;
@@ -170,6 +179,20 @@ export function buildReplay(
     }
   }
 
+  if (live) {
+    const key = live.inning * 2 + live.half;
+    if (key !== st.key) {
+      st.key = key; st.inning = live.inning; st.half = live.half; st.outs = 0; st.bases = 0;
+      while (st.line[live.half].length < live.inning) st.line[live.half].push(0);
+      newHalf = true;
+    }
+    batter = live.batter;
+    pitcherOf[live.half] = live.pitchers[1 - live.half].id;
+    st.outs = live.outs;
+    st.bases = (live.bases[0] ? 1 : 0) | (live.bases[1] ? 2 : 0) | (live.bases[2] ? 4 : 0);
+    snap('up', (newHalf ? `${halfLabel(st.inning, st.half)}. ` : '') + `Now batting: ${name(batter)}`, 'plain');
+    return { result: r, frames, log };
+  }
   const extra = r.innings > 9 ? ` in ${r.innings}` : '';
   snap('final', `Final${extra}: ${teamLabel(r.teamIds[0])} ${st.score[0]}, ${teamLabel(r.teamIds[1])} ${st.score[1]}`, 'big');
   return { result: r, frames, log };

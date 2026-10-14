@@ -73,6 +73,44 @@ function countBox(f: Frame): string {
 <div class="diamond" role="img" aria-label="${names.length ? `Runners on ${names.join(', ')}` : 'Bases empty'}">${base(!!(f.bases & 2), 'b2')}${base(!!(f.bases & 4), 'b3')}${base(!!(f.bases & 1), 'b1')}<span class="plate"></span></div></section>`;
 }
 
+/** Live games: your moves, and the bench coach's questions. */
+function managerPanel(app: App): string {
+  const g = app.game!, w = app.watch!, d = g.live?.day, c = d?.call;
+  if (!w.live || !d || !c) return '';
+  const me = g.liveSide, setup = d.setups[me], fielding = c.half !== me;
+  const mode = app.settings.manager;
+  const modeSel = `<label class="mgr-mode"><span class="sr-only">Your moves</span><select data-act="set-manager" title="Who makes your team's moves">${([['ask', 'ASK ME FIRST'], ['me', 'ALL MINE'], ['ai', 'BENCH COACH']] as const).map(([v, t]) => `<option value="${v}"${mode === v ? ' selected' : ''}>${t}</option>`).join('')}</select></label>`;
+  if (!app.liveEdge()) {
+    return win({ id: 'w-mgr', title: 'Manager', label: modeSel, cls: 'w-mgr', body: `<p class="note small">You're watching the game so far. Catch up to make moves.</p><div class="row-actions">${btn('CATCH UP', 'live-catch', { kind: 'primary', icon: 'ff' })}</div>` });
+  }
+  const used = new Set(c.used[me]);
+  const bench = (setup.bench ?? []).filter((p) => !used.has(p.id));
+  const pen = setup.bullpen.filter((a) => !used.has(a.player.id));
+  const opt = (id: number, text: string) => `<option value="${id}">${esc(text)}</option>`;
+  const penSel = `<select id="live-pitch-sel" aria-label="Reliever">${pen.map((a) => opt(a.player.id, `${a.role} ${a.player.name} · STA ${r5(a.player.ratings.stamina)}`)).join('')}</select>`;
+  const benchSel = (id: string) => `<select id="${id}" aria-label="Bench player">${bench.map((p) => opt(p.id, `${p.position} ${p.name} · CON ${r5(p.ratings.contact)} POW ${r5(p.ratings.power)} SPD ${r5(p.ratings.speed)}`)).join('')}</select>`;
+  const mine = c.pitchers[me];
+  let ask = '';
+  if (app.liveBlocked()) {
+    const want = c.aiPitch[me];
+    ask = `<div class="mgr-ask" role="alert"><p>${mode === 'ask' ? `Bench coach: ${esc(g.name(mine.id))} has thrown ${mine.pitches} pitches. Bring in ${esc(g.name(want))}?` : `${esc(g.name(mine.id))} has thrown ${mine.pitches} pitches. Your call: bring someone in below, or leave him in.`}</p>
+<div class="row-actions">${mode === 'ask' ? btn(`YES, ${esc(g.name(want)).toUpperCase()}`, 'live-ok', { kind: 'primary' }) : ''}${btn('LEAVE HIM IN', 'live-keep')}</div></div>`;
+  } else if (w.alert) {
+    ask = `<div class="mgr-ask alert" role="status"><p>${esc(w.alert)}</p><div class="row-actions">${btn('PLAY ON', 'live-go', { kind: 'primary', icon: 'play' })}</div></div>`;
+  }
+  const moves: string[] = [];
+  if (fielding) {
+    moves.push(`<div class="mgr-row"><span class="k">PITCHING · ${esc(g.name(mine.id))}, ${mine.pitches} PITCHES</span>${pen.length ? `<div class="mgr-ctl">${penSel}${btn('BRING IN', 'live-pitch')}</div>` : '<p class="note small muted">Nobody left in the bullpen.</p>'}</div>`);
+    if (bench.length) moves.push(`<div class="mgr-row"><span class="k">DEFENSIVE SUB</span><div class="mgr-ctl"><select id="live-def-slot" aria-label="Replace">${c.lineups[me].map(([id, pos], i) => pos >= 2 ? `<option value="${i}">${POS_ABBR[pos]} ${esc(g.name(id))}</option>` : '').join('')}</select>${benchSel('live-def-sel')}${btn('SWAP IN', 'live-def')}</div></div>`);
+  } else {
+    if (bench.length) moves.push(`<div class="mgr-row"><span class="k">PINCH HIT FOR ${esc(g.name(c.batter)).toUpperCase()}</span><div class="mgr-ctl">${benchSel('live-ph-sel')}${btn('PINCH HIT', 'live-ph')}</div></div>`);
+    const on = c.bases.map((id, b) => (id ? `<option value="${b}">${['1ST', '2ND', '3RD'][b]} ${esc(g.name(id))}</option>` : '')).join('');
+    if (bench.length && on) moves.push(`<div class="mgr-row"><span class="k">PINCH RUN</span><div class="mgr-ctl"><select id="live-pr-base" aria-label="Runner">${on}</select>${benchSel('live-pr-sel')}${btn('PINCH RUN', 'live-pr')}</div></div>`);
+    if (!bench.length) moves.push('<p class="note small muted">Nobody left on the bench.</p>');
+  }
+  return win({ id: 'w-mgr', title: fielding ? 'Manager · In the Field' : 'Manager · At Bat', label: modeSel, cls: 'w-mgr', body: `${ask}${moves.join('')}`, scroll: true });
+}
+
 function callBox(f: Frame): string {
   return `<div class="call tone-${f.tone}" role="status" aria-live="polite">${esc(f.call)}</div>`;
 }
@@ -118,7 +156,7 @@ export function watchView(app: App): string {
   return `<div class="frame screen-watch">${banner(`${esc(teamName(away)).toUpperCase()} AT ${esc(teamName(home)).toUpperCase()}`, sub)}
 <main class="main watch-main" id="main">${lineScore(app, f)}
 <div class="gv"><div class="gv-left">${matchup(app, f)}${thisAtBat(f)}</div>
-<div class="gv-center">${callBox(f)}${countBox(f)}</div>
+<div class="gv-center">${callBox(f)}${countBox(f)}${managerPanel(app)}</div>
 <div class="gv-right">${gameLog(app, f)}</div></div></main>
-<footer class="footer"><nav class="nav" aria-label="Screens">${iconBtn('temple', final ? 'Home' : 'Leave game (it plays out)', 'go', { data: { to: 'home' } })}${auto}</nav><div class="actions">${controls}</div></footer></div>`;
+<footer class="footer"><nav class="nav" aria-label="Screens">${iconBtn('temple', final ? 'Home' : w.live ? 'Leave game (the bench coach finishes it)' : 'Leave game (it plays out)', 'go', { data: { to: 'home' } })}${auto}</nav><div class="actions">${controls}</div></footer></div>`;
 }

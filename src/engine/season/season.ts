@@ -14,13 +14,13 @@
  * high-stamina reliever (bigger budget) can — that's how a rare superstar piles up 100+ innings.
  */
 import type { AtBatParams } from '../atbat/params';
-import { simulateGame } from '../game/game';
-import { newBatLine, newPitchLine, type BatLine, type GameResult, type PitchLine, type TeamGameSetup } from '../game/types';
+import { playGame, simulateGame } from '../game/game';
+import { newBatLine, newPitchLine, type BatLine, type GameCall, type GameMove, type GameResult, type PitchLine, type TeamGameSetup } from '../game/types';
 import { createRng, type Rng } from '../rng';
 import type { League, Player } from '../types';
-import { rosterMorning } from '../roster';
+import { activeOf, rosterMorning } from '../roster';
 import { postseasonAfterDay, type Postseason } from './postseason';
-import { buildSchedule, type Schedule } from './schedule';
+import { buildSchedule, type Schedule, type ScheduledGame } from './schedule';
 import { buildTeamPlans, type TeamPlan } from './teams';
 
 export const FATIGUE = {
@@ -100,29 +100,101 @@ export const isOver = (s: Season) => s.day >= s.schedule.days && (!s.postseason 
 export const regularOver = (s: Season) => s.day >= s.regularDays && (!s.postseason || (!!s.post && s.post.phase !== 'tiebreak'));
 export const inPostseason = (s: Season) => s.post?.phase === 'post';
 
-/** Simulate one calendar day (may be an off day for everyone). */
-export function simDay(s: Season): GameResult[] {
-  if (isOver(s)) return [];
+/** The morning: roster business, then everyone recovers a day. */
+function beginDay(s: Season): void {
   if (s.rosterRules) rosterMorning(s, s.userTeam);
   for (const [id, f] of s.fatigue) {
     if (f <= 0) continue;
     const bonus = s.players.get(id)?.abilities?.bounceBack ?? 0;
     s.fatigue.set(id, Math.max(0, f - FATIGUE.recovery * (1 + bonus)));
   }
-  const played: GameResult[] = [];
-  for (const g of s.schedule.byDay[s.day] ?? []) {
-    const post = g.kind === 'post';
-    const away = setupFor(s, g.away, post), home = setupFor(s, g.home, post);
-    const res = simulateGame(away, home, s.params, s.rng, { log: s.keepLogs });
-    res.day = s.day; res.start = g.start;
-    if (g.kind) res.kind = g.kind;
-    if (g.series) { res.series = g.series; res.game = g.game; }
-    record(s, res);
-    played.push(res);
-  }
+}
+/** Stamp a finished game with its place on the schedule, and count it. */
+function finishGame(s: Season, g: ScheduledGame, res: GameResult): GameResult {
+  res.day = s.day; res.start = g.start;
+  if (g.kind) res.kind = g.kind;
+  if (g.series) { res.series = g.series; res.game = g.game; }
+  record(s, res);
+  return res;
+}
+function playScheduled(s: Season, g: ScheduledGame): GameResult {
+  const post = g.kind === 'post';
+  const away = setupFor(s, g.away, post), home = setupFor(s, g.home, post);
+  return finishGame(s, g, simulateGame(away, home, s.params, s.rng, { log: s.keepLogs }));
+}
+function endDay(s: Season): void {
   s.day++;
   postseasonAfterDay(s);
+}
+
+/** Simulate one calendar day (may be an off day for everyone). */
+export function simDay(s: Season): GameResult[] {
+  if (isOver(s)) return [];
+  beginDay(s);
+  const played = (s.schedule.byDay[s.day] ?? []).map((g) => playScheduled(s, g));
+  endDay(s);
   return played;
+}
+
+// ---------------------------------------------------------------- a day with one game played live
+
+/**
+ * Today with one team's game played live: the games scheduled before it are simmed, then that game pauses before
+ * every plate appearance for the manager's moves, then the rest of the day is simmed. It runs in the same order as
+ * simDay, so a live game where nobody moves comes out exactly the same.
+ */
+export interface LiveDay {
+  s: Season;
+  game: ScheduledGame;
+  setups: [TeamGameSetup, TeamGameSetup];
+  gen: Generator<GameCall, GameResult, GameMove[] | undefined>;
+  /** The decision point waiting for moves; null once the game is over. */
+  call: GameCall | null;
+  results: GameResult[];
+  rest: ScheduledGame[];
+}
+
+export function startLiveDay(s: Season, teamId: number): LiveDay | null {
+  if (isOver(s)) return null;
+  const today = s.schedule.byDay[s.day] ?? [];
+  const at = today.findIndex((g) => g.home === teamId || g.away === teamId);
+  if (at < 0) return null;
+  beginDay(s);
+  const results = today.slice(0, at).map((g) => playScheduled(s, g));
+  const game = today[at], post = game.kind === 'post';
+  const setups: [TeamGameSetup, TeamGameSetup] = [setupFor(s, game.away, post), setupFor(s, game.home, post)];
+  for (const st of setups) st.bench = benchOf(s, st);
+  const gen = playGame(setups[0], setups[1], s.params, s.rng, { log: s.keepLogs, live: true });
+  const first = gen.next();
+  const day: LiveDay = { s, game, setups, gen, call: null, results, rest: today.slice(at + 1) };
+  if (first.done) finishLive(day, first.value); else day.call = first.value;
+  return day;
+}
+
+/** Send the manager's moves (or none) and play to the next decision point. Returns the finished game when it ends. */
+export function liveStep(day: LiveDay, moves: GameMove[] = []): GameResult | null {
+  if (!day.call) return null;
+  const r = day.gen.next(moves);
+  if (r.done) { day.call = null; return finishLive(day, r.value); }
+  day.call = r.value;
+  return null;
+}
+
+function finishLive(day: LiveDay, res: GameResult): GameResult {
+  const { s } = day;
+  day.results.push(finishGame(s, day.game, res));
+  for (const g of day.rest) day.results.push(playScheduled(s, g));
+  day.rest = [];
+  endDay(s);
+  return res;
+}
+
+/** Active position players not in the lineup: who's on the bench today. */
+function benchOf(s: Season, st: TeamGameSetup): Player[] {
+  const t = s.league.teams.find((x) => x.id === st.teamId);
+  if (!t) return [];
+  const inLineup = new Set(st.lineup.map((l) => l.player.id));
+  return activeOf(t).map((id) => s.players.get(id)!).filter((p) => p && p.position !== 'P' && !inLineup.has(p.id));
 }
 
 export function simDays(s: Season, n: number): GameResult[] {

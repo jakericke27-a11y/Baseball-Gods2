@@ -13,7 +13,7 @@ export const enum Play {
 }
 
 /** Event types in the per-game log. */
-export const enum Ev { PlateAppearance = 0, Steal = 1, PitchingChange = 2, WildPitch = 3 }
+export const enum Ev { PlateAppearance = 0, Steal = 1, PitchingChange = 2, WildPitch = 3, Substitution = 4 }
 
 /** Clutch / notable moments tagged during the game ("Notable Moments" from the old design). */
 export const enum Moment {
@@ -39,6 +39,42 @@ export interface TeamGameSetup {
   bullpen: BullpenArm[];
   /** Pre-game fatigue 0–100: shrinks the pitch budget and gates reliever availability. */
   fatigue: (playerId: number) => number;
+  /** Active position players not in the lineup: pinch hitters, pinch runners, defensive subs (live games). */
+  bench?: Player[];
+}
+
+/**
+ * A manager's move at a live game's decision point (before a plate appearance). Moves take effect at once and the
+ * game waits again at the same point; sending no moves plays on.
+ */
+export type GameMove =
+  | { kind: 'pitcher'; side: number; id: number }      // bring in a reliever from the bullpen
+  | { kind: 'keep'; side: number }                     // leave the pitcher in (overrides the AI this time)
+  | { kind: 'sub'; side: number; slot: number; id: number; why: 'hitter' | 'field' } // replace a lineup slot (same position)
+  | { kind: 'runner'; side: number; base: number; id: number }; // pinch-run for the runner on base 0–2
+
+/** A substitution, for the box score and the log. */
+export interface Sub { side: number; slot: number; incoming: number; outgoing: number; why: 'hitter' | 'runner' | 'field'; inning: number }
+
+/** What a live game shows at a decision point: the state before the next plate appearance. */
+export interface GameCall {
+  inning: number; half: 0 | 1; outs: number;
+  /** Runner ids on first, second, third (0: empty). */
+  bases: [number, number, number];
+  score: [number, number];
+  /** The batting side's next slot and hitter. */
+  slot: number; batter: number;
+  /** Each side's pitcher now: [away, home]. */
+  pitchers: Array<{ id: number; pitches: number; budget: number; starter: boolean }>;
+  /** Who the AI would bring in for each side right now (0: no change, or the manager already decided this time). */
+  aiPitch: [number, number];
+  /** Each side's lineup now ([player id, position] per slot). */
+  lineups: Array<Array<[number, number]>>;
+  /** Players already used (and so unavailable): pitchers who've pitched, players subbed out or in. */
+  used: [number[], number[]];
+  /** The event log so far, for the watch screen. */
+  log: Uint8Array | null;
+  pitchersUsed: [number[], number[]];
 }
 
 export interface BatLine {
@@ -80,6 +116,8 @@ export interface GameResult {
   pitchResults: number[];             // counts by PitchResult
   moments: GameMoment[];
   log: Uint8Array | null;
+  /** Substitutions made in the game (live games). */
+  subs?: Sub[];
   /** Copied from the scheduled game by the season loop: regular (unset), a Game 163, or postseason. */
   kind?: 'tiebreak' | 'post';
   series?: string;

@@ -29,7 +29,8 @@ export interface PaEvent {
 export interface StealEvent { type: 'steal'; inning: number; half: 0 | 1; runner: number; base: 2 | 3; safe: boolean }
 export interface WildPitchEvent { type: 'wp'; inning: number; half: 0 | 1; moves: Move[] }
 export interface ChangeEvent { type: 'change'; inning: number; half: 0 | 1; side: 0 | 1; incoming: number; outgoing: number }
-export type GameEvent = PaEvent | StealEvent | WildPitchEvent | ChangeEvent;
+export interface SubEvent { type: 'sub'; inning: number; half: 0 | 1; side: 0 | 1; why: 'hitter' | 'runner' | 'field'; slot: number; incoming: number; outgoing: number }
+export type GameEvent = PaEvent | StealEvent | WildPitchEvent | ChangeEvent | SubEvent;
 
 /** Outs a play made: the strikeout itself plus every move that ends in an out. */
 export function outsOnPlay(ev: PaEvent): number {
@@ -67,6 +68,10 @@ export function decodeEvents(log: Uint8Array): GameEvent[] {
     if (ev === Ev.PitchingChange) {
       const side = log[i++] as 0 | 1;
       out.push({ type: 'change', inning, half, side, incoming: u16(i), outgoing: u16(i + 2) });
+      i += 4;
+    } else if (ev === Ev.Substitution) {
+      const sw = log[i++], slot = log[i++];
+      out.push({ type: 'sub', inning, half, side: (sw & 1) as 0 | 1, why: (['hitter', 'runner', 'field'] as const)[(sw >> 1) & 3], slot, incoming: u16(i), outgoing: u16(i + 2) });
       i += 4;
     } else if (ev === Ev.WildPitch) {
       const k = log[i++];
@@ -166,6 +171,8 @@ function finalPitchNote(play: Play, pitches: Uint8Array): string {
 /** One line of play-by-play for an event (no indentation, no score). */
 export function eventText(ev: GameEvent, name: (id: number) => string, detail: PitchDetail = 'final'): string {
   if (ev.type === 'change') return `Pitching change: ${name(ev.incoming)} replaces ${name(ev.outgoing)}.`;
+  if (ev.type === 'sub') return ev.why === 'hitter' ? `Pinch hitter: ${name(ev.incoming)} bats for ${name(ev.outgoing)}.`
+    : ev.why === 'runner' ? `Pinch runner: ${name(ev.incoming)} runs for ${name(ev.outgoing)}.` : `Defensive change: ${name(ev.incoming)} replaces ${name(ev.outgoing)}.`;
   if (ev.type === 'steal') return `${name(ev.runner)} ${ev.safe ? 'steals' : 'is caught stealing'} ${BASE[ev.base]}.`;
   if (ev.type === 'wp') {
     return `Wild pitch! ${ev.moves.map((m) => (m.to === 4 ? `${name(m.runner)} scores` : `${name(m.runner)} to ${BASE[m.to]}`)).join(', ')}.`;

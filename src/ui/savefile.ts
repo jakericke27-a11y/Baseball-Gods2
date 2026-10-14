@@ -18,7 +18,7 @@ export interface SaveMeta { team: number; teamName: string; year: number; day: n
 
 interface SaveJson {
   format: string; v: number; meta: SaveMeta;
-  game: { seed: number; userTeam: number; headlines: Headline[]; offseason?: OffseasonReport | null; draftedByHand?: boolean };
+  game: { seed: number; userTeam: number; headlines: Headline[]; offseason?: OffseasonReport | null; draftedByHand?: boolean; movedByHand?: boolean };
   season: SeasonSnap;
   /** [offset, length] in logs.bin for each log the season lists. */
   logs: Array<[number, number]>;
@@ -36,7 +36,7 @@ export async function encodeSave(g: Game): Promise<{ bytes: Uint8Array; meta: Sa
   const bin = new Uint8Array(at);
   logs.forEach((l, i) => bin.set(l, index[i][0]));
   const meta = metaOf(g);
-  const json: SaveJson = { format: FILE_FORMAT, v: FILE_VERSION, meta, game: { seed: g.seed, userTeam: g.userTeam, headlines: g.headlines, offseason: g.offseason, draftedByHand: g.draftedByHand }, season: data, logs: index };
+  const json: SaveJson = { format: FILE_FORMAT, v: FILE_VERSION, meta, game: { seed: g.seed, userTeam: g.userTeam, headlines: g.headlines, offseason: g.offseason, draftedByHand: g.draftedByHand, movedByHand: g.movedByHand }, season: data, logs: index };
   const bytes = await zip([{ name: 'save.json', data: new TextEncoder().encode(JSON.stringify(json)) }, { name: 'logs.bin', data: bin }], true);
   return { bytes, meta };
 }
@@ -62,6 +62,7 @@ export async function decodeSave(bytes: Uint8Array): Promise<{ game: Game; meta:
   game.headlines = j.game.headlines;
   game.offseason = j.game.offseason ?? null;
   game.draftedByHand = !!j.game.draftedByHand;
+  game.movedByHand = !!j.game.movedByHand;
   return { game, meta: j.meta };
 }
 

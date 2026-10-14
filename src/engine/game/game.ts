@@ -14,7 +14,8 @@ import type { Rng } from '../rng';
 import type { Player } from '../types';
 import {
   Ev, Moment, Play, newBatLine, newPitchLine,
-  type BatLine, type BullpenArm, type BullpenRole, type GameMoment, type GameResult, type PitchLine, type TeamGameSetup,
+  type BatLine, type BullpenArm, type BullpenRole, type GameCall, type GameMoment, type GameMove, type GameResult, type LineupSlot,
+  type PitchLine, type Sub, type TeamGameSetup,
 } from './types';
 
 interface Runner { id: number; pid: number; earned: boolean; spd: number }
@@ -50,10 +51,30 @@ function plannedOuts(role: BullpenRole | 'SP', stamina: number, blowout: boolean
 }
 const CLUTCH_PER_SD = 0.10;
 
+/** One full game, start to finish, with every call made by the AI managers. */
 export function simulateGame(
   away: TeamGameSetup, home: TeamGameSetup, P: AtBatParams, rng: Rng, opts: { log: boolean } = { log: false },
 ): GameResult {
+  const g = playGame(away, home, P, rng, { log: opts.log, live: false });
+  for (;;) { const r = g.next(); if (r.done) return r.value; }
+}
+
+/**
+ * The same game as a generator. With `live`, it pauses before every plate appearance and yields a GameCall; send back
+ * the manager's moves (or nothing) to go on. Moves change only what they touch: a game where nobody moves plays out
+ * exactly as simulateGame does, pitch for pitch (the decision points consume no dice).
+ */
+export function* playGame(
+  away: TeamGameSetup, home: TeamGameSetup, P: AtBatParams, rng: Rng, opts: { log: boolean; live: boolean },
+): Generator<GameCall, GameResult, GameMove[] | undefined> {
   const teams = [away, home];
+  // This game's own lineups (substitutions change them; the team's plan is untouched), and the starting ones.
+  const lineups: LineupSlot[][] = [away.lineup.map((s) => ({ ...s })), home.lineup.map((s) => ({ ...s }))];
+  const startLineups: [LineupSlot[], LineupSlot[]] = [away.lineup.slice(), home.lineup.slice()];
+  const subs: Sub[] = [];
+  /** Everyone who's appeared, and who's out of the game for good, per side. */
+  const appeared = [new Set(away.lineup.map((s) => s.player.id)), new Set(home.lineup.map((s) => s.player.id))];
+  const gone = [new Set<number>(), new Set<number>()];
   const score: [number, number] = [0, 0];
   const lineScore: [number[], number[]] = [[], []];
   const hits: [number, number] = [0, 0], errors: [number, number] = [0, 0], lob: [number, number] = [0, 0];
@@ -117,7 +138,8 @@ export function simulateGame(
     return pick('MR') ?? pick('LR') ?? pick('SU') ?? pool[0];
   };
 
-  const maybeChangePitcher = (fld: number, atInningStart: boolean, runnersOn: number) => {
+  /** Who the AI would bring in now, or null to stay with the pitcher he has. No dice: just the rules. */
+  const pitcherPlan = (fld: number, atInningStart: boolean, runnersOn: number): BullpenArm | null => {
     const ps = cur[fld];
     const lead = score[fld] - score[1 - fld];
     const save = lead >= 1 && lead <= 3, close = lead >= -1 && lead <= 3;
@@ -134,11 +156,65 @@ export function simulateGame(
         (atInningStart && ps.outs >= ps.planned) ||
         (atInningStart && inning >= 9 && ps.role !== 'CL' && (save || (lead === 0 && fld === 1)) && closerReady(fld));
     }
-    if (!pull) return;
-    const next = chooseReliever(fld, lead);
-    if (!next) return; // bullpen empty: he stays in and wears it
-    if (log) { log.u8(Ev.PitchingChange); log.u8(inning | (fld === 1 ? 0 : 0x80)); log.u8(fld); log.u16(next.player.id); log.u16(ps.p.id); }
+    if (!pull) return null;
+    return chooseReliever(fld, lead); // null when the bullpen is empty: he stays in and wears it
+  };
+  const bringIn = (fld: number, next: BullpenArm) => {
+    if (log) { log.u8(Ev.PitchingChange); log.u8(inning | (fld === 1 ? 0 : 0x80)); log.u8(fld); log.u16(next.player.id); log.u16(cur[fld].p.id); }
     cur[fld] = enter(fld, next.player, false, next.role);
+  };
+  const maybeChangePitcher = (fld: number, atInningStart: boolean, runnersOn: number) => {
+    const next = pitcherPlan(fld, atInningStart, runnersOn);
+    if (next) bringIn(fld, next);
+  };
+
+  // ---- Live games: decision points and the manager's moves ----
+  const WHY = { hitter: 0, runner: 1, field: 2 } as const;
+  const logSub = (bat: number, sb: Sub) => {
+    subs.push(sb);
+    if (log) { log.u8(Ev.Substitution); log.u8(inning | (bat << 7)); log.u8(sb.side | (WHY[sb.why] << 1)); log.u8(sb.slot); log.u16(sb.incoming); log.u16(sb.outgoing); }
+  };
+  const benchPlayer = (side: number, id: number) => {
+    if (gone[side].has(id) || appeared[side].has(id)) return undefined;
+    return teams[side].bench?.find((p) => p.id === id);
+  };
+  const replaceSlot = (side: number, slot: number, p: Player, why: Sub['why'], bat: number) => {
+    const old = lineups[side][slot];
+    lineups[side][slot] = { player: p, pos: old.pos };
+    if (old.pos >= 2) defense[side].fielders[old.pos] = p.ratings;
+    gone[side].add(old.player.id); appeared[side].add(p.id); bl(p.id);
+    logSub(bat, { side, slot, incoming: p.id, outgoing: old.player.id, why, inning });
+  };
+  const applyMove = (m: GameMove, bat: number, bases: Array<Runner | null>) => {
+    const fld = 1 - bat;
+    if (m.kind === 'pitcher') {
+      if (m.side !== fld || used[fld].has(m.id)) return;
+      const arm = teams[fld].bullpen.find((a) => a.player.id === m.id);
+      if (arm) bringIn(fld, arm);
+    } else if (m.kind === 'sub') {
+      const p = benchPlayer(m.side, m.id);
+      if (p && lineups[m.side][m.slot] && (m.why !== 'hitter' || m.side === bat)) replaceSlot(m.side, m.slot, p, m.why, bat);
+    } else if (m.kind === 'runner') {
+      const rn = bases[m.base], p = benchPlayer(m.side, m.id);
+      if (!rn || !p || m.side !== bat) return;
+      const slot = lineups[bat].findIndex((x) => x.player.id === rn.id);
+      if (slot < 0) return;
+      replaceSlot(bat, slot, p, 'runner', bat);
+      bases[m.base] = { ...rn, id: p.id, spd: z(p.ratings.speed) };
+    }
+  };
+  const makeCall = (bat: number, outs: number, bases: Array<Runner | null>, first: boolean, held: boolean): GameCall => {
+    const fld = 1 - bat, runnersOn = (bases[0] ? 1 : 0) + (bases[1] ? 1 : 0) + (bases[2] ? 1 : 0);
+    const aiPitch: [number, number] = [0, 0];
+    if (!held) aiPitch[fld] = pitcherPlan(fld, first, runnersOn)?.player.id ?? 0;
+    return {
+      inning, half: bat as 0 | 1, outs, bases: [bases[0]?.id ?? 0, bases[1]?.id ?? 0, bases[2]?.id ?? 0], score: [score[0], score[1]],
+      slot: order[bat] % 9, batter: lineups[bat][order[bat] % 9].player.id,
+      pitchers: cur.map((c) => ({ id: c.p.id, pitches: c.pitches, budget: c.budget, starter: c.starter })),
+      aiPitch, lineups: lineups.map((l) => l.map((x): [number, number] => [x.player.id, x.pos])),
+      used: [[...used[0], ...gone[0], ...appeared[0]], [...used[1], ...gone[1], ...appeared[1]]],
+      log: log ? log.toBytes() : null, pitchersUsed: [pitchersUsed[0].slice(), pitchersUsed[1].slice()],
+    };
   };
 
   const clutchShift = (b: Player, p: Player, risp: boolean, lateClose: boolean): number => {
@@ -151,7 +227,7 @@ export function simulateGame(
     return 0;
   };
 
-  const halfInning = (bat: number) => {
+  const halfInning = function* (bat: number): Generator<GameCall, void, GameMove[] | undefined> {
     const fld = 1 - bat;
     const ih = inning | (bat << 7);
     let outs = 0;
@@ -162,7 +238,17 @@ export function simulateGame(
     let first = true;
 
     while (outs < 3 && !walkoff) {
-      maybeChangePitcher(fld, first, (bases[0] ? 1 : 0) + (bases[1] ? 1 : 0) + (bases[2] ? 1 : 0));
+      let held = false;
+      if (opts.live) {
+        // Moves take effect at once and the game waits again at the same moment; sending none plays on.
+        for (;;) {
+          const moves = (yield makeCall(bat, outs, bases, first, held)) ?? [];
+          if (!moves.length) break;
+          for (const m of moves) applyMove(m, bat, bases);
+          if (moves.some((m) => (m.kind === 'pitcher' || m.kind === 'keep') && m.side === fld)) held = true;
+        }
+      }
+      if (!held) maybeChangePitcher(fld, first, (bases[0] ? 1 : 0) + (bases[1] ? 1 : 0) + (bases[2] ? 1 : 0));
       first = false;
       if (cur[fld].p.id !== firstPitcher) onePitcher = false;
       const ps = cur[fld];
@@ -188,7 +274,7 @@ export function simulateGame(
       }
 
       // ---- The plate appearance ----
-      const slot = teams[bat].lineup[order[bat] % 9];
+      const slot = lineups[bat][order[bat] % 9];
       const batter = slot.player;
       const diffBefore = score[bat] - score[fld];
       const risp = bases[1] !== null || bases[2] !== null;
@@ -451,9 +537,9 @@ export function simulateGame(
   };
 
   for (;;) {
-    halfInning(0);
+    yield* halfInning(0);
     if (inning >= 9 && score[1] > score[0]) break; // home team doesn't need its half
-    halfInning(1);
+    yield* halfInning(1);
     if (walkoff) break;
     if (inning >= 9 && score[0] !== score[1]) break;
     if (++inning > 40) break; // safety valve; never reached in practice
@@ -487,7 +573,7 @@ export function simulateGame(
     const solo = pitchersUsed[side].length === 1;
     if (hits[opp] === 0) {
       let reached = errors[side];
-      for (const s of teams[opp].lineup) { const l = bl(s.player.id); reached += l.BB + l.HBP; }
+      for (const id of appeared[opp]) { const l = bl(id); reached += l.BB + l.HBP; }
       moments.push({ kind: reached === 0 ? Moment.PerfectGame : Moment.NoHitter, playerId: solo ? sp : 0, inning, value: 0 });
     }
     if (solo && score[opp] === 0) moments.push({ kind: Moment.ShutoutCG, playerId: sp, inning, value: 0 });
@@ -496,7 +582,8 @@ export function simulateGame(
   return {
     day: -1, start: 0,
     teamIds: [away.teamId, home.teamId], score, innings: inning, lineScore, hits, errors, lob, outsRecorded,
-    batting, pitching, lineups: [away.lineup, home.lineup], pitchersUsed,
+    batting, pitching, lineups: startLineups, pitchersUsed,
     decisions: { win, loss, save }, budgets, pitchResults, moments, log: log ? log.toBytes() : null,
+    ...(subs.length ? { subs } : {}),
   };
 }

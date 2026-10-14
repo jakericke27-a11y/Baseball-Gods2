@@ -12,6 +12,7 @@ import { release, signFreeAgent, swap, toggleClaim, type MoveError } from '../en
 import { lightingAt, type Lighting } from '../engine/season/schedule';
 import type { League } from '../engine/types';
 import { autoPick, autoPicks, done, onClock, pick, type DraftState } from '../engine/draft';
+import type { GameMove, GameResult } from '../engine/game/types';
 import { finishFounding, foundingLeague, generateLeague } from '../engine/generate';
 import { promote } from '../engine/offseason';
 import { Music } from './audio';
@@ -26,9 +27,22 @@ import { view } from './views';
 
 export type Screen = 'title' | 'picker' | 'draft' | 'home' | 'watch' | 'standings' | 'games' | 'leaders' | 'races' | 'scouting' | 'roster' | 'gamelog' | 'news' | 'offseason';
 export type Modal = { kind: 'settings' } | { kind: 'player'; id: number } | { kind: 'password' } | { kind: 'restart' };
-export interface Settings { readable: boolean; detail: PitchDetail; music: boolean; volume: number }
+/** Live games: who makes your team's moves. 'ask': the bench coach asks first; 'me': nothing moves unless you do;
+ *  'ai': the bench coach decides and play flows (you can still step in). */
+export type ManagerMode = 'ask' | 'me' | 'ai';
+export interface Settings { readable: boolean; detail: PitchDetail; music: boolean; volume: number; manager: ManagerMode }
 export interface Busy { label: string; done: number; total: number; note: string; stoppable: boolean }
-export interface Watch { replay: Replay; at: number; auto: boolean; index: number }
+export interface Watch {
+  replay: Replay; at: number; auto: boolean;
+  /** The game's index in the season's results (-1 while it's still live). */
+  index: number;
+  /** Your game, being played now: the frames end at the decision point it's waiting at. */
+  live: boolean;
+  /** Key-moment alerts already shown (each stops auto-play once). */
+  alerted: Set<string>;
+  /** The alert showing now, if any. */
+  alert: string;
+}
 
 const SETTINGS_KEY = 'baseball-gods/settings';
 const tick = () => new Promise<void>((r) => setTimeout(r, 0));
@@ -50,7 +64,7 @@ export class App {
   titleStage: 'press' | 'menu' = 'press';
   modal: Modal | null = null;
   game: Game | null = null;
-  settings: Settings = { readable: false, detail: 'final', music: true, volume: 0.7 };
+  settings: Settings = { readable: false, detail: 'final', music: true, volume: 0.7, manager: 'ask' };
   /** The league in this browser's database slot, if any. */
   slot: SaveMeta | null = null;
   /** An old-style save (seed, team, day; replayed to load), from before full saves or when the database is unavailable. */
@@ -149,7 +163,7 @@ export class App {
     return { v: SAVE_VERSION, seed: g.seed, team: g.userTeam, day: g.day };
   }
   /** The 10-character password replays Year 1 only (seed, team, day). */
-  password(): string { return this.game && this.game.year === 1 && !this.game.draftedByHand ? toPassword(this.saveData()) : ''; }
+  password(): string { return this.game && this.game.year === 1 && !this.game.draftedByHand && !this.game.movedByHand ? toPassword(this.saveData()) : ''; }
 
   /** The draft on screen, whichever kind. */
   draftSession(): { league: League; draft: DraftState; userTeam: number } | null {
@@ -161,11 +175,13 @@ export class App {
   /** Autosave: the whole league to the database slot, after the screen has updated. Saves queue up; only the latest is written. */
   private persist() {
     if (!this.game || this.game.winter) return; // mid-winter there's nothing to save: the year-end save replays the winter exactly
+    if (this.game.live) { this.dirty = true; return; } // mid-game: saved once the day is done
     this.dirty = true;
     if (!this.saving) this.saving = this.flush().finally(() => { this.saving = null; });
   }
   private async flush(): Promise<void> {
     while (this.dirty && this.game) {
+      if (this.game.live) return; // a live game in progress: wait for the day to finish
       this.dirty = false;
       const g = this.game;
       await tick();
@@ -440,21 +456,121 @@ export class App {
   }
 
   /** Play today and watch your game. */
+  /** Play today with your game live: the rest of the league sims around it. */
   watchToday(): void {
     const g = this.game;
     if (!g || g.over) return;
-    const results = g.simDay();
+    if (!g.startLive()) { g.simDay(); this.persist(); this.render(); return; }
+    this.stopAuto();
+    if (!g.live) { this.liveDone(); return; }
+    this.watch = { replay: this.liveReplay(), at: 0, auto: false, index: -1, live: true, alerted: new Set(), alert: '' };
+    this.screen = 'watch';
+    this.stickLog = true;
+    this.render();
+  }
+
+  /** The live game so far, as a replay ending at the decision point it's waiting at. */
+  private liveReplay(): Replay {
+    const g = this.game!, d = g.live!.day, c = d.call!;
+    const partial: GameResult = {
+      day: g.day, start: d.game.start, teamIds: [d.setups[0].teamId, d.setups[1].teamId], score: c.score, innings: c.inning,
+      lineScore: [[], []], hits: [0, 0], errors: [0, 0], lob: [0, 0], outsRecorded: [0, 0], batting: new Map(), pitching: new Map(),
+      lineups: [d.setups[0].lineup, d.setups[1].lineup], pitchersUsed: c.pitchersUsed, decisions: { win: 0, loss: 0, save: 0 },
+      budgets: new Map(), pitchResults: [], moments: [], log: c.log ?? new Uint8Array(0),
+      ...(d.game.kind ? { kind: d.game.kind } : {}), ...(d.game.series ? { series: d.game.series, game: d.game.game } : {}),
+    };
+    return buildReplay(partial, g.name, teamName, this.settings.detail, g.userTeam, c);
+  }
+  /** Your live game ended: show the whole game, save the day. */
+  private liveDone(): void {
+    const g = this.game!;
+    const idx = [...g.season.results.keys()].reverse().find((i) => g.season.results[i].teamIds.includes(g.userTeam) && g.season.results[i].day === g.day - 1);
     this.persist();
-    const mine = results.find((r) => r.teamIds.includes(g.userTeam));
-    if (mine) this.openReplay(g.resultIndexOf(mine));
-    else this.render();
+    if (idx === undefined) { this.render(); return; }
+    const at = this.watch?.at ?? 0;
+    this.watch = { replay: buildReplay(g.season.results[idx], g.name, teamName, this.settings.detail, g.userTeam), at: 0, auto: this.watch?.auto ?? false, index: idx, live: false, alerted: new Set(), alert: '' };
+    this.watch.at = Math.min(at + 1, this.watch.replay.frames.length - 1);
+    this.screen = 'watch';
+    this.stickLog = true;
+    this.render();
+  }
+
+  /**
+   * What stops a live game before the next at-bat, by your manager mode: a move the bench coach wants (Ask me: he
+   * asks; Me: you decide) blocks; key moments pause auto-play once. In AI mode nothing stops.
+   */
+  liveStop(): { block: boolean; text: string } | null {
+    const g = this.game, c = g?.live?.day.call, w = this.watch;
+    if (!g || !c || !w) return null;
+    const mode = this.settings.manager;
+    if (mode === 'ai') return null;
+    const me = g.liveSide, fielding = c.half !== me;
+    const mine = c.pitchers[me], name = g.name(mine.id);
+    if (fielding && c.aiPitch[me]) {
+      return { block: true, text: mode === 'ask' ? `Bench coach: ${name} has thrown ${mine.pitches} pitches. Bring in ${g.name(c.aiPitch[me])}?`
+        : `${name} has thrown ${mine.pitches} pitches. Your call: make a change or leave him in.` };
+    }
+    const lateClose = c.inning >= 7 && Math.abs(c.score[0] - c.score[1]) <= 1;
+    let key = '', text = '';
+    if (fielding && mine.pitches >= 0.9 * mine.budget) { key = `tired:${mine.id}`; text = `${name} is tiring (${mine.pitches} pitches).`; }
+    else if (!fielding && lateClose && (c.bases[1] || c.bases[2])) { key = `risp:${c.inning}:${c.half}:${c.outs}:${c.batter}`; text = `Late and close with a runner in scoring position: a pinch hitter or runner?`; }
+    if (key && !w.alerted.has(key)) return { block: false, text: (w.alerted.add(key), text) };
+    return null;
+  }
+
+  /** Play the live game on to its next decision point (unless something stops it). Returns false if it stopped. */
+  private liveForward(): boolean {
+    const g = this.game!, w = this.watch!;
+    const stop = this.liveStop();
+    if (stop) { w.alert = stop.text; this.stopAuto(); return false; }
+    w.alert = '';
+    const res = g.liveAdvance();
+    if (res || !g.live) { this.liveDone(); return false; }
+    w.replay = this.liveReplay();
+    return true;
+  }
+
+  /** A manager's move in the live game: it happens now, the game waits for you again. */
+  private liveMove(m: GameMove): void {
+    const g = this.game, w = this.watch;
+    if (!g?.live || !w) return;
+    g.liveMove(m);
+    w.alert = '';
+    w.replay = this.liveReplay();
+    w.at = w.replay.frames.length - 1;
+    this.stickLog = true;
+    this.render();
+  }
+
+  /** The live game is waiting on a pitching decision from you (Ask me or Me mode). */
+  liveBlocked(): boolean {
+    const g = this.game, c = g?.live?.day.call;
+    return !!c && !!g && this.settings.manager !== 'ai' && c.half !== g.liveSide && !!c.aiPitch[g.liveSide];
+  }
+  /** At the end of what's been played in a live game (where moves can be made). */
+  liveEdge(): boolean {
+    const w = this.watch;
+    if (!w?.live) return false;
+    // nothing left to see but the next batter stepping in
+    for (let j = w.at + 1; j < w.replay.frames.length; j++) if (w.replay.frames[j].kind !== 'up' && w.replay.frames[j].kind !== 'start') return false;
+    return true;
+  }
+
+  /** Leaving a live game: the bench coach finishes it. */
+  private leaveLive(): void {
+    const g = this.game;
+    if (!g?.live) return;
+    this.stopAuto();
+    g.liveFinish();
+    this.persist();
+    if (this.watch) this.watch.live = false;
   }
 
   openReplay(index: number): void {
     const g = this.game!;
     const r = g.season.results[index];
     this.stopAuto();
-    this.watch = { replay: buildReplay(r, g.name, teamName, this.settings.detail, g.userTeam), at: 0, auto: false, index };
+    this.watch = { replay: buildReplay(r, g.name, teamName, this.settings.detail, g.userTeam), at: 0, auto: false, index, live: false, alerted: new Set(), alert: '' };
     this.screen = 'watch';
     this.stickLog = true;
     this.render();
@@ -463,6 +579,16 @@ export class App {
   private stepWatch(to: number): void {
     const w = this.watch;
     if (!w) return;
+    // Live: stepping past what's been played plays on (the frames grow; the target is re-aimed at the new frames).
+    if (w.live && to > w.replay.frames.length - 1) {
+      const before = w.replay.frames.length;
+      if (w.at < before - 1) { /* catch up first */ }
+      else if (!this.liveForward()) { if (w.live) this.render(); return; }
+      if (!w.live) return; // the game ended and liveDone took over
+      const grew = w.replay.frames.length - before;
+      to = Math.min(to === Infinity ? w.replay.frames.length - 1 : to, w.replay.frames.length - 1);
+      if (grew <= 0 && w.at >= w.replay.frames.length - 1) { this.render(); return; }
+    }
     const last = w.replay.frames.length - 1;
     const target = Math.max(0, Math.min(last, to));
     if (target === w.at) return;
@@ -471,7 +597,7 @@ export class App {
     for (let j = w.at + 1; j <= target; j++) { const s = w.replay.frames[j].stinger; if (s === 'walkoff' || (s && !sting)) sting = s; }
     w.at = target;
     if (sting) void this.music.stinger(sting);
-    if (w.at === last) this.stopAuto();
+    if (w.at === last && !w.live) this.stopAuto();
     this.stickLog = true;
     this.render();
   }
@@ -484,7 +610,7 @@ export class App {
     const run = () => {
       if (!this.watch?.auto || this.screen !== 'watch') return;
       const f = this.watch.replay.frames[this.watch.at];
-      if (this.watch.at >= this.watch.replay.frames.length - 1) { this.stopAuto(); this.render(); return; }
+      if (this.watch.at >= this.watch.replay.frames.length - 1 && !this.watch.live) { this.stopAuto(); this.render(); return; }
       this.stepWatch(this.watch.at + 1);
       const next = this.watch.replay.frames[this.watch.at];
       this.autoTimer = window.setTimeout(run, next.kind === 'result' || next.kind === 'event' || f.kind === 'result' ? 1500 : 650);
@@ -534,6 +660,7 @@ export class App {
     else if (act === 'set-readable') { this.settings.readable = (el as HTMLInputElement).checked; document.documentElement.classList.toggle('readable', this.settings.readable); this.saveSettings(); this.parkKey = ''; this.render(); }
     else if (act === 'set-music') { this.settings.music = (el as HTMLInputElement).checked; this.music.setEnabled(this.settings.music); this.saveSettings(); }
     else if (act === 'set-volume') { this.settings.volume = Number(el.value) / 100; this.music.setVolume(this.settings.volume); this.saveSettings(); }
+    else if (act === 'set-manager') { this.settings.manager = el.value as ManagerMode; this.saveSettings(); if (this.watch) this.watch.alert = ''; this.render(); }
     else if (act === 'set-detail') { this.settings.detail = el.value as PitchDetail; this.saveSettings(); this.render(); }
     else if (act === 'music-file') {
       const input = el as HTMLInputElement;
@@ -700,6 +827,7 @@ export class App {
         if (!g) return;
         const to = (d.to ?? 'home') as Screen;
         if (this.screen === 'watch') this.stopAuto();
+        if (g.live) this.leaveLive(); // leaving your live game: the bench coach finishes it
         if (to === 'games' && d.index !== undefined) { this.gamesPick = Number(d.index); this.gamesDay = g.season.results[this.gamesPick].day; }
         if (to === 'gamelog' && d.index !== undefined) this.logPick = Number(d.index);
         if (to === 'roster' && d.team !== undefined) this.rosterTeam = Number(d.team);
@@ -720,9 +848,49 @@ export class App {
       case 'watch': this.watchToday(); return;
       case 'replay': this.openReplay(Number(d.index)); return;
       case 'w-pitch': if (this.watch) this.stepWatch(this.watch.at + 1); return;
-      case 'w-ab': if (this.watch) this.stepWatch(nextAtBat(this.watch.replay, this.watch.at)); return;
-      case 'w-inning': if (this.watch) this.stepWatch(nextInning(this.watch.replay, this.watch.at)); return;
-      case 'w-end': if (this.watch) this.stepWatch(this.watch.replay.frames.length - 1); return;
+      case 'w-ab': if (this.watch) { if (this.liveEdge() && !this.liveForward()) { this.render(); return; } if (this.watch.live || this.watch.at < this.watch.replay.frames.length - 1) this.stepWatch(nextAtBat(this.watch.replay, this.watch.at)); } return;
+      case 'w-inning': {
+        const w = this.watch;
+        if (!w) return;
+        if (w.live) { // play on until the half-inning turns over (or something stops it)
+          const half = (f: { inning: number; half: number }) => f.inning * 2 + f.half;
+          const from = half(w.replay.frames[w.at]);
+          while (w.live && half(w.replay.frames[w.replay.frames.length - 1]) === from) { w.at = w.replay.frames.length - 1; if (!this.liveForward()) break; }
+          if (w.live) { w.at = w.replay.frames.length - 1; this.stickLog = true; this.render(); }
+          return;
+        }
+        this.stepWatch(nextInning(w.replay, w.at)); return;
+      }
+      case 'w-end': {
+        const w = this.watch;
+        if (!w) return;
+        if (w.live) {
+          while (w.live) { w.at = w.replay.frames.length - 1; if (!this.liveForward()) break; }
+          const now = this.watch!; // the finished game replaces the live one
+          if (!now.live) now.at = now.replay.frames.length - 1;
+          this.stickLog = true; this.render();
+          return;
+        }
+        this.stepWatch(w.replay.frames.length - 1); return;
+      }
+      case 'live-ok': { const c = g?.live?.day.call; if (c && g) this.liveMove({ kind: 'pitcher', side: g.liveSide, id: c.aiPitch[g.liveSide] }); return; }
+      case 'live-keep': if (g?.live) this.liveMove({ kind: 'keep', side: g.liveSide }); return;
+      case 'live-catch': if (this.watch) { this.watch.at = this.watch.replay.frames.length - 1; this.stickLog = true; this.render(); } return;
+      case 'live-go': { // play on past an alert or after your moves
+        const w = this.watch;
+        if (w && g?.live) { const stop = this.liveStop(); if (stop?.block) { w.alert = stop.text; this.render(); return; } w.alert = ''; const res = g.liveAdvance(); if (res || !g.live) { this.liveDone(); return; } w.replay = this.liveReplay(); this.stepWatch(w.at + 1); }
+        return;
+      }
+      case 'live-pitch': case 'live-ph': case 'live-pr': case 'live-def': {
+        if (!g?.live) return;
+        const val = (sel: string) => Number(this.root.querySelector<HTMLSelectElement>(sel)?.value ?? 0);
+        const me = g.liveSide;
+        if (act === 'live-pitch') { const id = val('#live-pitch-sel'); if (id) this.liveMove({ kind: 'pitcher', side: me, id }); }
+        else if (act === 'live-ph') { const id = val('#live-ph-sel'); if (id) this.liveMove({ kind: 'sub', side: me, slot: g.live.day.call!.slot, id, why: 'hitter' }); }
+        else if (act === 'live-pr') { const id = val('#live-pr-sel'), base = val('#live-pr-base'); if (id) this.liveMove({ kind: 'runner', side: me, base, id }); }
+        else { const id = val('#live-def-sel'), slot = val('#live-def-slot'); if (id) this.liveMove({ kind: 'sub', side: me, slot, id, why: 'field' }); }
+        return;
+      }
       case 'w-auto': this.toggleAuto(); return;
       case 'w-box': if (this.watch) { this.stopAuto(); void this.act('go', { to: 'games', index: String(this.watch.index) }); } return;
       case 'games-day': {

@@ -310,6 +310,20 @@ New-engine guards: runs vs BaseRuns check, RBI ≤ R, per-team start limits by r
   trends over 1/2/4 years from the yearly snapshots, a draft preview (cycle record so far, the lottery ten with exact
   top-6 odds from the weights, your projected slot), your board and your prospects. Phone footer icons shrink to fit
   nine screens and Settings.
+- 2026-10-14 — Live games (step 2.5, part 1). The game engine is a generator (`playGame`): with `live` it pauses before
+  every plate appearance and yields a GameCall (state, lineups, pitchers, who the AI would bring in, the log so far);
+  moves (`pitcher`, `keep`, `sub` for pinch hitters and defensive subs, `runner`) take effect at once and the game waits
+  again at the same point; sending none plays on. The decision points use no dice, so an untouched live game is pitch
+  for pitch the simmed one (`simulateGame` drives the same generator; the 20-year baseline is unchanged). A live day
+  (`startLiveDay`) sims the day's earlier games, plays yours live, then sims the rest, in simDay's order. WATCH now plays
+  your game live; the replay ends at the decision point and grows as you step. Manager modes (your call): ASK ME FIRST
+  (default: the bench coach asks before his move, and auto-play stops once at key moments: your pitcher tiring, late
+  and close with a runner in scoring position), ALL MINE (nothing moves unless you do; the game waits when a decision
+  is due), BENCH COACH (he decides, play flows, you can still step in). Leaving the game lets the bench coach finish it.
+  Substitutions are logged (Ev.Substitution), shown in the play-by-play and the box score (under the player replaced),
+  and saved (snapshot v9). Any move other than saying yes to the bench coach marks the year `movedByHand`, which turns
+  off the Year 1 password (it can't replay your moves); save files keep everything. Mid-game the autosave waits for the
+  day to finish. Also fixed: on phones the watch screen's windows no longer squeeze down to their title bars.
 
 ## Design philosophy (2026-10-03)
 Realistic baseline; the fun is in finding combinations that BREAK it (ratings + abilities + favor +

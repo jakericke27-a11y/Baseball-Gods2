@@ -62,14 +62,20 @@ function boxScoreHtml(g: Game, r: GameResult, index: number): string {
 ${[0, 1].map((side) => `<tr${r.teamIds[side] === g.userTeam ? ' class="mine"' : ''}><th scope="row" class="ls-team">${tname(r.teamIds[side])}</th>${Array.from({ length: innings }, (_, i) => `<td>${i < r.lineScore[side].length ? r.lineScore[side][i] : side === 1 && i === r.lineScore[1].length && i < r.innings ? 'x' : ''}</td>`).join('')}<td class="ls-gap"></td><td class="rhe">${r.score[side]}</td><td class="rhe">${r.hits[side]}</td><td class="rhe">${r.errors[side]}</td></tr>`).join('')}</table></div>`;
   const bat = (side: 0 | 1) => {
     const notes: Record<string, string[]> = { '2B': [], '3B': [], HR: [], SB: [] };
-    const rows = r.lineups[side].map((s) => {
-      const b = r.batting.get(s.player.id)!;
-      const nm = s.player.name;
+    // starters in order, each followed by whoever came in for his spot (pinch hitters, runners, defensive subs)
+    const order: Array<{ id: number; pos: string; sub: string }> = [];
+    r.lineups[side].forEach((s, slot) => {
+      order.push({ id: s.player.id, pos: POS_ABBR[s.pos], sub: '' });
+      for (const x of (r.subs ?? []).filter((y) => y.side === side && y.slot === slot)) order.push({ id: x.incoming, pos: x.why === 'hitter' ? 'PH' : x.why === 'runner' ? 'PR' : POS_ABBR[s.pos], sub: ` · ${x.inning}${['th', 'st', 'nd', 'rd'][x.inning % 10 > 3 || [11, 12, 13].includes(x.inning % 100) ? 0 : x.inning % 10]}` });
+    });
+    const rows = order.map((s) => {
+      const b = r.batting.get(s.id)!;
+      const nm = g.name(s.id);
       if (b.D) notes['2B'].push(nm + (b.D > 1 ? ` ${b.D}` : ''));
       if (b.T) notes['3B'].push(nm + (b.T > 1 ? ` ${b.T}` : ''));
       if (b.HR) notes.HR.push(nm + (b.HR > 1 ? ` ${b.HR}` : ''));
       if (b.SB) notes.SB.push(nm + (b.SB > 1 ? ` ${b.SB}` : ''));
-      return `<tr><th scope="row">${link(nm, 'player', { id: s.player.id })} <span class="muted">${POS_ABBR[s.pos]}</span></th><td>${b.AB}</td><td>${b.R}</td><td>${b.H}</td><td>${b.RBI}</td><td>${b.BB}</td><td>${b.K}</td></tr>`;
+      return `<tr${s.sub ? ' class="box-sub"' : ''}><th scope="row">${link(nm, 'player', { id: s.id })} <span class="muted">${s.pos}${s.sub}</span></th><td>${b.AB}</td><td>${b.R}</td><td>${b.H}</td><td>${b.RBI}</td><td>${b.BB}</td><td>${b.K}</td></tr>`;
     }).join('');
     const note = Object.entries(notes).filter(([, v]) => v.length).map(([k, v]) => `<p class="box-note"><b>${k}:</b> ${esc(v.join(', '))}</p>`).join('');
     return `<div class="box-side"><div class="hscroll"><table class="stat"><caption>${tname(r.teamIds[side])}</caption><tr><th scope="col">BATTING</th><th scope="col">AB</th><th scope="col">R</th><th scope="col">H</th><th scope="col">RBI</th><th scope="col">BB</th><th scope="col">K</th></tr>${rows}</table></div>${note}</div>`;
@@ -275,7 +281,7 @@ export function gameLogView(app: App): string {
     const runs = ev.type === 'pa' ? ev.runs : ev.type === 'wp' ? ev.moves.filter((m) => m.to === 4).length : 0;
     h.runs += runs;
     const tone = ev.type === 'pa' ? playTone(ev.play) : ev.type === 'steal' ? (ev.safe ? 't-on' : 't-out') : '';
-    h.lines.push(`<p class="log-line ${tone}${runs ? ' scored' : ''}${ev.type === 'change' ? ' change' : ''}">${esc(eventText(ev, g.name, app.settings.detail))}</p>`);
+    h.lines.push(`<p class="log-line ${tone}${runs ? ' scored' : ''}${ev.type === 'change' || ev.type === 'sub' ? ' change' : ''}">${esc(eventText(ev, g.name, app.settings.detail))}</p>`);
   }
   const pbp = halves.map((h) => `<details class="half" open><summary>${halfLabel(h.inning, h.half).toUpperCase()} — ${esc(teamName(r.teamIds[h.half])).toUpperCase()} <span class="half-runs">${h.runs} R</span></summary>${h.lines.join('')}</details>`).join('');
   const detail = `<label class="detail-pick"><span class="k">PITCH DETAIL</span><select data-act="set-detail" id="detail-pick"><option value="final"${app.settings.detail === 'final' ? ' selected' : ''}>Summary</option><option value="full"${app.settings.detail === 'full' ? ' selected' : ''}>Full sequences</option><option value="none"${app.settings.detail === 'none' ? ' selected' : ''}>Plays only</option></select></label>`;
