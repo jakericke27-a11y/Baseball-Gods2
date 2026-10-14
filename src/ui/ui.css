@@ -120,6 +120,18 @@ svg.px { display: block; flex-shrink: 0; }
 .trow.hot::after { bottom: 0; }
 .trow.cold::after { top: 0; animation-duration: 1.6s; }
 @keyframes flicker { 0% { background-position: 0 0; } 50% { background-position: 0 calc(var(--strip-h) * -1); } }
+.trow.fx-out, .trow.fx-thaw { overflow: hidden; }
+.trow.fx-out { animation: fx-out-edge 1.4s steps(4) 1; }
+.trow.fx-thaw { animation: fx-thaw-edge 1.4s steps(4) 1; }
+.trow.fx-out::before, .trow.fx-thaw::before { content: ''; position: absolute; left: 0; right: 0; pointer-events: none; image-rendering: pixelated; }
+/* the flames go out: grey puffs rise and fade */
+.trow.fx-out::before { bottom: 0; height: 16px; background: repeating-linear-gradient(90deg, rgba(200, 204, 216, 0.85) 0 8px, transparent 8px 20px, rgba(150, 156, 170, 0.7) 20px 24px, transparent 24px 36px); animation: fx-smoke 1.4s steps(6) 1 forwards; }
+/* the ice breaks: shards drop and melt */
+.trow.fx-thaw::before { top: 0; height: 12px; background: repeating-linear-gradient(90deg, var(--ice) 0 4px, transparent 4px 14px, #EAF8FF 14px 18px, transparent 18px 30px); animation: fx-shards 1.4s steps(6) 1 forwards; }
+@keyframes fx-smoke { from { transform: translateY(0); opacity: 0.95; } to { transform: translateY(-28px); opacity: 0; } }
+@keyframes fx-shards { from { transform: translateY(0); opacity: 1; } to { transform: translateY(24px); opacity: 0; } }
+@keyframes fx-out-edge { from { box-shadow: inset 0 0 0 4px var(--fire); } to { box-shadow: inset 0 0 0 4px transparent; } }
+@keyframes fx-thaw-edge { from { box-shadow: inset 0 0 0 4px var(--ice); } to { box-shadow: inset 0 0 0 4px transparent; } }
 .trow.mine { background: var(--hi); outline: 4px solid var(--frame); outline-offset: 2px; }
 .playoff-line { margin: 0 2px 4px; padding: 6px 0 4px; border-bottom: 4px dashed var(--action); font: var(--l-xs)/1 var(--f-label); letter-spacing: 3px; color: var(--playoff); text-align: center; }
 
@@ -258,6 +270,33 @@ table.linescore.small { font-size: var(--d-m); }
 .sc-meta { font: var(--d-s)/1.1 var(--f-data); color: var(--muted); }
 .sched { display: grid; gap: 2px; padding: 8px 0; border-bottom: 4px solid var(--rule); font: var(--d-m)/1.15 var(--f-data); }
 .sched.mine { color: #FFFFFF; }
+/* ---------------------------------------------------------------- races */
+.race-lead { padding: 10px 16px; font: var(--d-m)/1.25 var(--f-data); color: var(--gold); outline: none; }
+.race-mark { display: inline-block; width: 1.3em; margin-right: 6px; padding: 1px 0; text-align: center; font: var(--l-xs)/1.1 var(--f-label); background: var(--line); color: var(--text); }
+.race-mark.m-z { background: var(--gold); color: var(--night); }
+.race-mark.m-x { background: var(--good); color: var(--night); }
+.race-mark.m-e { background: var(--rule); color: var(--muted); }
+.race-key { padding: 8px 16px; outline: none; line-height: 1.4; }
+.race-out { margin-top: 8px; line-height: 1.6; }
+.race-out .link { font: var(--d-s)/1.2 var(--f-data); }
+.race-cards { margin-top: 8px; }
+.race-list, .chase-list { list-style: none; margin: 0; padding: 0; }
+.race-list li { padding: 6px 4px 8px; border-bottom: 4px solid var(--rule); }
+.race-list li.close { border-left: 4px solid var(--fire); padding-left: 8px; }
+.rl-h { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.tag { padding: 2px 6px; background: var(--fire); color: var(--night); font: var(--l-xs)/1 var(--f-label); letter-spacing: 1px; }
+.rl-p { display: grid; grid-template-columns: 1.6em minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 2px 0; font: var(--d-s)/1.2 var(--f-data); }
+.rl-p .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rl-p .rank { color: var(--muted); }
+.rl-p.mine, .chase-list li.mine { background: var(--hi); }
+.rl-f { margin-top: 2px; line-height: 1.3; }
+.chase-list li { display: flex; flex-direction: column; gap: 2px; padding: 6px 4px; border-bottom: 4px solid var(--rule); font: var(--d-s)/1.25 var(--f-data); }
+.sub-h { margin: 12px 0 4px; font: var(--l-xs)/1.2 var(--f-label); letter-spacing: 2px; color: var(--gold); }
+.sub-h:first-child { margin-top: 0; }
+.small-tabs { margin-bottom: 8px; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; }
+.form-list .nm { white-space: normal; }
+.w-form { margin-top: 26px; }
 .row-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 8px 0 6px; }
 .box-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; padding-top: 10px; }
 .box-side { min-width: 0; }
@@ -367,7 +406,7 @@ input[type="file"] { font: var(--d-s)/1.2 var(--f-data); }
   .w-yours { order: 1; } .w-tonight { order: 2; } .w-div { order: 3; } .w-wild { order: 4; max-height: 460px; } .dash-center { order: 5; }
   .gv { display: flex; flex-direction: column; gap: 22px; }
   .call { order: 1; align-self: center; } .count-win { order: 2; align-self: center; } .w-matchup { order: 3; } .w-ab { order: 4; max-height: 280px; } .w-log { order: 5; max-height: 460px; }
-  .two-col, .games-layout { grid-template-columns: 1fr; }
+  .two-col, .games-layout, .form-grid { grid-template-columns: 1fr; }
   .games-layout > .win { max-height: 560px; }
   .picker-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -385,10 +424,20 @@ input[type="file"] { font: var(--d-s)/1.2 var(--f-data); }
   .picker-grid, .box-grid { grid-template-columns: 1fr; }
   .lead-grid { grid-template-columns: 1fr; }
   .music-test { grid-template-columns: 1fr 1fr; }
+  /* the playoff race on a phone: team, record, the number and the odds */
+  .race-t { --cols: minmax(0, 1fr) 28px 28px 44px 44px !important; }
+  .race-t .thead > :nth-child(4), .race-t .trow > :nth-child(4), .race-t .thead > :nth-child(6), .race-t .trow > :nth-child(6), .race-t .x { display: none; }
+}
+@media (max-width: 480px) {
+  /* eight screens and settings on one row */
+  .nav { gap: 2px; padding: 4px; }
+  .icon-btn { width: 40px; height: 40px; }
+  .icon-btn svg.px { width: 32px; height: auto; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .ticker-track { overflow-x: auto; }
+  .trow.fx-out::before, .trow.fx-thaw::before { display: none; }
 }
 /* Determination Mono sizes for the few rules with literal sizes (readable mode keeps its own). */
 :root:not(.readable) .banner-top { font-size: 24px; letter-spacing: 2px; }

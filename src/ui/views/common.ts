@@ -44,7 +44,9 @@ export const link = (text: string, act: string, data: Data, cls = '') =>
 /** A table row that can carry flames (hot) or icicles (cold), and an outline for your team. */
 export function trow(cells: string[], heat = 0, mine = false): string {
   const cls = ['trow', heat > 0 ? `hot hot-${heat}` : '', heat < 0 ? `cold cold-${-heat}` : '', mine ? 'mine' : ''].filter(Boolean).join(' ');
-  return `<div class="${cls}" role="row">${cells.map((c, i) => `<div role="${i === 0 ? 'rowheader' : 'cell'}">${c}</div>`).join('')}</div>`;
+  // team rows carry their team and heat, so the app can play the flip when a streak ends (App.streakFlips)
+  const team = /data-act="team" data-id="(\d+)"/.exec(cells[0])?.[1];
+  return `<div class="${cls}" role="row"${team ? ` data-team="${team}" data-heat="${heat}"` : ''}>${cells.map((c, i) => `<div role="${i === 0 ? 'rowheader' : 'cell'}">${c}</div>`).join('')}</div>`;
 }
 export const thead = (cells: string[]) => `<div class="thead" role="row">${cells.map((c) => `<div role="columnheader">${c}</div>`).join('')}</div>`;
 export const ttable = (cols: string, label: string, inner: string) => `<div class="ttable" role="table" aria-label="${esc(label)}" style="--cols: ${cols}">${inner}</div>`;
@@ -57,7 +59,7 @@ export function banner(top: string, sub: string, compact = false): string {
 }
 
 const NAV: Array<[IconName, string, string]> = [
-  ['temple', 'Home', 'home'], ['pennant', 'Standings', 'standings'], ['ball', 'Games', 'games'], ['crown', 'Leaders', 'leaders'],
+  ['temple', 'Home', 'home'], ['pennant', 'Standings', 'standings'], ['ball', 'Games', 'games'], ['crown', 'Leaders', 'leaders'], ['flag', 'Races', 'races'],
   ['jersey', 'Roster', 'roster'], ['scroll', 'Game log', 'gamelog'],
 ];
 

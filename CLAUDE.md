@@ -12,6 +12,8 @@ Read DESIGN.md before changing engine behavior. Keep this file short.
 - `npm run report -- baseline` — one full season: league line, pitch metrics, leaderboards, log size
 - `npm run curves -- baseline` — what each rating does
 - `npm run season -- baseline` — a full season: standings, playoff picture, leaders, pitcher usage
+- `npm run years -- 20 --check` — 20 seasons back to back against the saved baseline (run after any engine change;
+  `--save` records a new baseline once a change is deliberate)
 - `npm run games -- baseline` — a full season of real games: league line, run math, integrity, box score, play-by-play
 
 ## Rules

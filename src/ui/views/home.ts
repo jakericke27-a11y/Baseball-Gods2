@@ -7,6 +7,7 @@ import type { App } from '../app';
 import { dateLabel, weekOf, weekdayShort } from '../calendar';
 import type { Game } from '../state';
 import { era, era2, gbText, heat, last10, leaders, raceText, races, streakText } from '../stats';
+import { oddsText, playoffPicture } from '../races';
 import { FINAL_NAME, bracketHtml, findSeries, postText, seriesShort } from '../post';
 import { DIVISIONS, LEAGUES, teamName } from '../teams';
 import { icon } from '../sprites';
@@ -70,7 +71,7 @@ function yourTeam(g: Game): string {
   const kv = (k: string, v: string) => `<div class="kv"><div class="k">${k}</div><div class="v">${v}</div></div>`;
   const body = `<div class="yt-record"><span class="big-num">${me.W}-${me.L}</span><span class="yt-place">${placeTxt} in ${LEAGUES[t.conference]} ${DIVISIONS[t.division]}</span></div>
 <div class="kv-row">${kv('RUN DIFF', diff > 0 ? `+${diff}` : String(diff))}${kv('STREAK', streakText(me))}${kv('LAST 10', last10(me))}</div>
-<div class="yt-race">${esc(postText(g, g.userTeam) || raceText(g, g.userTeam))}</div>${lastLine}`;
+<div class="yt-race">${esc(postText(g, g.userTeam) || [raceText(g, g.userTeam), me.W + me.L ? oddsText(playoffPicture(g).find((x) => x.teamId === g.userTeam)!) : ''].filter(Boolean).join(' · '))}</div>${lastLine}`;
   return win({ id: 'w-yours', title: 'Your Team', label: teamName(g.userTeam).toUpperCase(), body, open: 'roster', openData: { team: g.userTeam }, cls: 'w-yours' });
 }
 
@@ -139,7 +140,7 @@ function wildCard(g: Game): string {
     if (i === 1) rows += '<div class="playoff-line" role="presentation">PLAYOFF LINE</div>';
   });
   return win({
-    id: 'w-wild', title: 'Wild Card', label: `${race.wildCard.length} TEAMS · ${LEAGUES[t.conference].toUpperCase()}`, open: 'standings',
+    id: 'w-wild', title: 'Wild Card', label: `${race.wildCard.length} TEAMS · ${LEAGUES[t.conference].toUpperCase()}`, open: 'races',
     body: ttable(cols, 'Wild card race', thead(['TEAM', 'W', 'L', 'GB']) + rows), scroll: true, cls: 'w-wild',
   });
 }

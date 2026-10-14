@@ -13,6 +13,8 @@ import { refreshPlan } from '../engine/roster';
 import { createSeason, isOver, simDay, type Season } from '../engine/season/season';
 import type { League, Player } from '../engine/types';
 import { postHeadlines } from './post';
+import { raceHeadlines, raceStatus } from './races';
+import { catchUpStreaks, newStreakBook, type StreakBook } from '../engine/season/races';
 import { teamName } from './teams';
 
 export const PARAMS = applyEnvironment(DEFAULT_PARAMS, baseline as LeagueEnvironment);
@@ -36,6 +38,8 @@ export class Game {
   offseason: OffseasonReport | null = null;
   /** A winter in progress (a draft waiting for you). Not saved: a reload replays the winter exactly from the year-end save. */
   winter: Winter | null = null;
+  /** Running streaks (hitting, on-base, scoreless), kept up to date with the season's results. */
+  streaks: StreakBook = newStreakBook();
   /** You made founding-draft picks yourself (then the Year 1 password, which replays an auto-drafted league, can't help). */
   draftedByHand = false;
 
@@ -58,6 +62,8 @@ export class Game {
     for (const t of this.league.teams) for (const id of t.playerIds) this.teamOf.set(id, t.id);
     this.byDay = new Map();
     season.results.forEach((g, i) => { const a = this.byDay.get(g.day) ?? []; a.push(i); this.byDay.set(g.day, a); });
+    this.streaks = newStreakBook();
+    catchUpStreaks(this.streaks, season.results);
   }
 
   get year() { return this.season.year; }
@@ -135,16 +141,19 @@ export class Game {
 
   get day() { return this.season.day; }
   get over() { return isOver(this.season); }
-  name = (id: number) => this.players.get(id)?.name ?? '?';
+  /** Anyone's name: current players, then retired ones (record holders, career lines). */
+  name = (id: number) => this.players.get(id)?.name ?? this.league.retired.find((p) => p.id === id)?.name ?? '?';
 
   /** Simulate one calendar day (often an off day for some teams, sometimes for everyone). */
   simDay(): GameResult[] {
     const day = this.season.day;
+    const before = raceStatus(this);
     const results = simDay(this.season);
     const start = this.season.results.length - results.length;
     if (results.length) this.byDay.set(day, results.map((_, i) => start + i));
     this.addHeadlines(day, results);
     this.headlines.push(...postHeadlines(this, day, results));
+    this.headlines.push(...raceHeadlines(this, day, results, before, catchUpStreaks(this.streaks, this.season.results)));
     return results;
   }
 

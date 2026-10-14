@@ -53,6 +53,7 @@ const GRIDS = {
   right: ['w...', 'ww..', 'www.', 'wwww', 'www.', 'ww..', 'w...'],
   box: ['wwwwwwwww', 'w.w.w.w.w', 'wwwwwwwww', 'w.w.w.w.w', 'wwwwwwwww', 'w.w.w.w.w', 'wwwwwwwww'],
   close: ['w....w', '.w..w.', '..ww..', '..ww..', '.w..w.', 'w....w'],
+  flag: ['wwwyywwyyw', 'wwwyywwyyw', 'wyywwyywwy', 'wyywwyywwy', 'wwwyywwyyw', 'wwwyywwyyw', 'w.........', 'w.........', 'w.........', 'w.........'],
   note: ['...www', '...w.w', '...w.w', '...w..', '.www..', 'wwww..', '.ww...'],
 } as const;
 

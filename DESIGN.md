@@ -148,6 +148,30 @@ About 140 KB of JSON (≈50 KB compressed) per season, two thirds of it the rati
 Ratings change only over the winter today, so one snapshot per season is exact; add in-season snapshots when
 something changes ratings mid-year.
 
+## Races and storylines (`engine/season/races.ts`, `ui/races.ts`)
+Read-only views of the season; nothing here changes it. The Races screen (footer, and the clubhouse MENU) shows:
+- **Playoff race** per league: W-L, games left, magic (M) or elimination (E) number, division and playoff odds.
+  Odds come from simming the rest of the regular schedule as weighted coin flips (log5 of each team's run-differential
+  record pulled 40 games toward .500, plus a .035 home edge), 300 times, on an RNG seeded from the year and day, so
+  asking never moves the season and a day's odds are stable. Magic number: (rival's wins + games left) − your wins + 1.
+- **Clinched and eliminated are proofs**, never estimates: clinched = still in if you lose out and everyone else wins
+  out (ties against you); eliminated = still out if you win out and everyone else loses out (ties for you, since a tie
+  is a Game 163). Shown as z (division), x (spot), e (out). Odds show "<1%" / ">99%" until something is proven.
+- **Leader races**: the top two in nine categories, the gap, the leader's pace and the league record. "Close" is a gap
+  under a per-category width (4 HR, .012 AVG, 0.30 ERA...).
+- **Triple Crown watch**: leading two of AVG/HR/RBI (or W/SO/ERA) with the third in reach, or all three.
+- **Chases**: record paces (counting stats) and career milestones within reach (300+ HR, 2,000+ H, 200+ W, 2,000+ K,
+  300+ SV). Records come from history, so Year 1 sets the first marks quietly.
+- **Hot and cold**: OPS and ERA over the last 7, 14 or 30 days (minimum PA / outs per window).
+- **Streaks**: hitting (games with an at-bat), on-base, and scoreless innings (whole appearances without a run, so a
+  slight undercount), each with the year's best; teams on fire or on ice. When a team's flames go out or its ice
+  breaks, its row plays a one-shot smoke or shard animation the next time you see it (off with reduced motion).
+Headlines: clinches; eliminations (one line a day, yours on its own); hitting streaks from 25 games and on-base streaks
+from 40 (thresholds set high because streaks run long, see Open questions); scoreless streaks from 25 innings; career
+milestones; single-season records the day they fall (against history and this year's leaders); weekly close races and
+Triple Crown watches in the last four to six weeks; record paces at 60 and 30 days left; the batting and ERA titles,
+a Triple Crown and rate-stat records when the regular season ends.
+
 ## Event log (`src/engine/log.ts`)
 Per game: PA events (inning/half, outs+bases before, batter, pitcher, play, fielder+batted-ball type,
 quality, runs+RBI, every pitch as one byte, runner movements incl. where outs happened), steals,
@@ -229,6 +253,11 @@ New-engine guards: runs vs BaseRuns check, RBI ≤ R, per-team start limits by r
 - 2026-10-14 — The Draft (step 1.6): founding snake draft (pick early, auto the rest), ten-round four-year draft
   from Year 4, lottery for 1–6 among the ten worst cycle records, one blurry prospect view for everyone, the AI
   suggests and you decide on prospects. The Year 1 password only replays auto-drafted leagues.
+- 2026-10-14 — Regression baseline: `npm run years -- 20 --check` compares the first and last five years of a 20-year
+  run against `calibration/years-baseline.json` with tolerances; `--save` records a new baseline after a deliberate
+  change. Offense drifts down ~8% over 20 years (10.2 → 9.4 R/G); left as is for now, to decide at the Phase 2 tuning pass.
+- 2026-10-14 — Races and storylines (step 2.1): the Races screen and race headlines (see the section above). Odds and
+  races are computed on demand and cached per day; clinch checks only run in the last 75 days so long sims stay fast.
 
 ## Design philosophy (2026-10-03)
 Realistic baseline; the fun is in finding combinations that BREAK it (ratings + abilities + favor +
@@ -341,6 +370,8 @@ If it throws, it turns itself off and the dashboard shows. Art slots, rooms and 
 - Aces in four-man rotations reach 300+ strikeouts and 25 wins (41 starts, ~250 IP) — old-school by design;
   revisit if it feels too extreme.
 - Cycles ~8/season (MLB ~2–5): doubles run a bit high (~30/600 vs 27.5) and regulars never rest.
+- Streaks run long for the same reasons: about ten 20-game hitting streaks a year (MLB ~3) and many 35-game on-base
+  streaks; batting titles near .340 and 170+ RBI seasons. Revisit with rest days; then lower the headline thresholds.
 - Strikeouts looking are 34% of Ks (MLB ~25%) — tune two-strike swings with the game loop.
 - Baseline K% is 20%; real 2019 was 23%.
 - Gods' decree mechanism: multiply ratings (×1.15 also widens the star gap) vs shift a dial.

@@ -72,7 +72,7 @@ async function main() {
   await click('[data-act="w-box"]');
   ok(app().screen === 'games' && doc.querySelectorAll('.w-boxscore table.stat').length === 4, 'box score shows batting and pitching for both teams');
 
-  for (const to of ['standings', 'games', 'leaders', 'roster', 'gamelog', 'home']) {
+  for (const to of ['standings', 'games', 'leaders', 'races', 'roster', 'gamelog', 'home']) {
     await click(`.nav [data-act="go"][data-to="${to}"]`);
     ok(app().screen === to && doc.querySelector('main'), `screen ${to} renders`);
   }
@@ -98,7 +98,17 @@ async function main() {
 
   await click('[data-act="sim-week"]');
   await click('[data-act="sim-month"]');
+  await click('.nav [data-act="go"][data-to="races"]');
+  ok(doc.querySelectorAll('.w-race-0, #w-race-0-t').length && doc.querySelectorAll('[aria-label$="playoff race"] .trow').length >= 10, 'races show both leagues\' playoff race');
+  ok(/%/.test(text('#main')) && /M\d+/.test(text('#main')), 'the race has odds and magic numbers');
+  ok(doc.querySelectorAll('.race-list li').length === 9, 'nine leader races');
+  await click('[data-act="form-days"][data-days="7"]');
+  ok(app().formDays === 7 && text('.w-form .win-label').includes('LAST 7'), 'hot and cold switch to the last 7 days');
+  await click('.nav [data-act="go"][data-to="home"]');
+  ok(/playoff odds|Clinched|Eliminated/.test(text('.yt-race')), 'your team shows its playoff odds');
   await click('[data-act="sim-end"]');
+  ok(app().game.headlines.some((h: any) => /clinch/.test(h.text)), 'clinches make the headlines');
+  ok(app().game.headlines.some((h: any) => h.text.startsWith('Regular season over')), 'the regular season closes with its titles');
   ok(!app().game.over && app().game.season.post?.seeds.length === 2, 'sim to end stops when the regular season is over and the field is set');
   if (app().screen !== 'home') await click('.nav [data-act="go"][data-to="home"]');
   ok(doc.querySelector('.w-bracket') && doc.querySelectorAll('.br-series').length >= 2, 'the home screen shows the bracket in October');

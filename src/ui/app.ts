@@ -20,7 +20,7 @@ import { SLOT, deleteLeague, getLeague, putLeague, requestPersistence } from './
 import { applyTeamColors, teamColors, teamName } from './teams';
 import { view } from './views';
 
-export type Screen = 'title' | 'picker' | 'draft' | 'home' | 'watch' | 'standings' | 'games' | 'leaders' | 'roster' | 'gamelog' | 'news' | 'offseason';
+export type Screen = 'title' | 'picker' | 'draft' | 'home' | 'watch' | 'standings' | 'games' | 'leaders' | 'races' | 'roster' | 'gamelog' | 'news' | 'offseason';
 export type Modal = { kind: 'settings' } | { kind: 'player'; id: number } | { kind: 'password' } | { kind: 'restart' };
 export interface Settings { readable: boolean; detail: PitchDetail; music: boolean; volume: number }
 export interface Busy { label: string; done: number; total: number; note: string; stoppable: boolean }
@@ -64,6 +64,8 @@ export class App {
   /** The founding draft in progress (no league to play yet). */
   founding: { seed: number; team: number; league: League; draft: DraftState; byHand: boolean } | null = null;
   draftFilter: 'all' | 'bats' | 'arms' = 'all';
+  /** Hot and cold: the window in days. */
+  formDays: 7 | 14 | 30 = 14;
   /** A player whose RELEASE was pressed once (the second press confirms). */
   releaseArmed = 0;
   busy: Busy | null = null;
@@ -236,8 +238,26 @@ export class App {
     if (focusTarget) focusTarget.focus({ preventScroll: true });
     else if (this.modal) this.root.querySelector<HTMLElement>('.modal [data-autofocus], .modal button')?.focus({ preventScroll: true });
 
+    this.streakFlips();
     this.updatePark();
     this.updateMusic();
+  }
+
+  /** Heat each team row last showed. When a hot team cools or a cold one warms, its row plays the flip once. */
+  private shownHeat = new Map<number, number>();
+  private shownHeatYear = 0;
+  private streakFlips(): void {
+    const g = this.game;
+    if (!g) return;
+    if (g.year !== this.shownHeatYear) { this.shownHeat.clear(); this.shownHeatYear = g.year; }
+    const seen = new Map<number, number>();
+    this.root.querySelectorAll<HTMLElement>('.trow[data-team]').forEach((el) => {
+      const id = Number(el.dataset.team), h = Number(el.dataset.heat), was = this.shownHeat.get(id);
+      if (was !== undefined && was > 0 && h <= 0) el.classList.add('fx-out');
+      else if (was !== undefined && was < 0 && h >= 0) el.classList.add('fx-thaw');
+      seen.set(id, h);
+    });
+    for (const [id, h] of seen) this.shownHeat.set(id, h);
   }
 
   private updatePark(): void {
@@ -654,6 +674,7 @@ export class App {
       }
       case 'games-pick': this.gamesPick = Number(d.index); this.render(); return;
       case 'log-pick': this.logPick = Number(d.index); this.render(); return;
+      case 'form-days': this.formDays = Number(d.days) as App['formDays']; this.render(); return;
       case 'news': if (g) { this.screen = 'news'; this.render(); } return;
       case 'roster-tab': this.rosterTab = d.tab as App['rosterTab']; this.releaseArmed = 0; this.render(); return;
       case 'roster-auto': {

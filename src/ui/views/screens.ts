@@ -15,7 +15,7 @@ import { DIVISIONS, LEAGUES, teamName } from '../teams';
 import { bannerFor, simActions } from './home';
 import { btn, esc, footer, link, r5, thead, trow, ttable, win } from './common';
 
-const page = (app: App, current: string, inner: string) =>
+export const page = (app: App, current: string, inner: string) =>
   `<div class="frame screen-page">${bannerFor(app.game!)}<main class="main page" id="main" data-scroll="page-${current}">${inner}</main>${footer(current, simActions(app.game!))}</div>`;
 
 // ------------------------------------------------------------------ standings

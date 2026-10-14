@@ -5,6 +5,7 @@ import { offseasonView } from './offseason';
 import { gameLogView, gamesView, leadersView, newsView, rosterView, standingsView } from './screens';
 import { busyView, modalView, pickerView, titleView, toastView } from './shell';
 import { watchView } from './watch';
+import { racesView } from './races';
 
 export function view(app: App): string {
   let screen: string;
@@ -18,6 +19,7 @@ export function view(app: App): string {
       case 'standings': screen = standingsView(app); break;
       case 'games': screen = gamesView(app); break;
       case 'leaders': screen = leadersView(app); break;
+      case 'races': screen = racesView(app); break;
       case 'roster': screen = rosterView(app); break;
       case 'gamelog': screen = gameLogView(app); break;
       case 'news': screen = newsView(app); break;
