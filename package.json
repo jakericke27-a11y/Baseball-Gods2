@@ -1,0 +1,28 @@
+{
+  "name": "baseball-gods",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "calibrate": "tsx tools/calibrate.ts",
+    "report": "tsx tools/report.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "curves": "tsx tools/curves.ts",
+    "games": "tsx tools/games.ts",
+    "season": "tsx tools/season.ts",
+    "build:web": "tsx tools/build-web.ts",
+    "play": "tsx tools/build-web.ts && tsx tools/serve.ts",
+    "ballpark": "tsx tools/ballpark.ts",
+    "smoke": "tsx tools/build-web.ts && tsx tools/smoke.ts"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^26.6.4",
+    "esbuild": "^0.24.2",
+    "jsdom": "^25.0.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.3"
+  }
+}

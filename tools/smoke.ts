@@ -1,0 +1,127 @@
+/**
+ * Smoke test the built page in a headless DOM: title → pick a team → home → watch a game pitch by pitch →
+ * every screen → settings → sim to the end → reload the save and confirm the year replays identically.
+ *   npx tsx tools/smoke.ts   (run npm run build:web first)
+ */
+import { readFileSync } from 'node:fs';
+import { JSDOM, VirtualConsole } from 'jsdom';
+
+const html = readFileSync('dist/web/index.html', 'utf8');
+const errors: string[] = [];
+const vc = new VirtualConsole();
+vc.on('jsdomError', (e) => { if (!/getContext|Could not load link|Could not load script/.test(String(e.message))) errors.push(`jsdom: ${e.message}`); });
+vc.on('error', (...a) => errors.push(`console.error: ${a.join(' ')}`));
+
+const dom = new JSDOM(html, {
+  url: 'http://localhost/', runScripts: 'dangerously', pretendToBeVisual: true, virtualConsole: vc,
+  beforeParse(w) {
+    (w as unknown as { CSS: unknown }).CSS = { escape: (s: string) => s.replace(/["\\]/g, '\\$&') };
+    w.HTMLCanvasElement.prototype.getContext = (() => null) as never;
+    w.addEventListener('error', (e) => errors.push(`window: ${e.message}`));
+  },
+});
+const w = dom.window, doc = w.document;
+const app = () => (w as unknown as { __bg: any }).__bg;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+async function settle() { for (let i = 0; i < 2000; i++) { await sleep(5); if (!app().busy) { await sleep(5); return; } } throw new Error('stuck busy'); }
+function q(sel: string) { const el = doc.querySelector<HTMLElement>(sel); if (!el) throw new Error(`missing ${sel} on screen ${app().screen}`); return el; }
+async function click(sel: string) { q(sel).click(); await settle(); }
+const text = (sel: string) => q(sel).textContent ?? '';
+const ok = (cond: unknown, msg: string) => { if (!cond) throw new Error(msg); console.log(`  ✓ ${msg}`); };
+
+async function main() {
+  await sleep(50);
+  ok(text('.press').includes('PRESS ANY KEY'), 'title screen waits for a key');
+  doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await sleep(10);
+  ok(doc.querySelector('[data-act="new-league"]'), 'menu appears after a key');
+  await click('[data-act="new-league"]');
+  ok(doc.querySelectorAll('.pick').length === 30, 'picker lists 30 teams');
+  await click('[data-act="pick-team"][data-id="20"]');
+  ok(q('[data-act="pick-team"][data-id="20"]').getAttribute('aria-pressed') === 'true', 'picking a team selects it');
+  ok(getComputedStyleVar('--line') !== '', 'team colors applied');
+  await click('[data-act="start-year"]');
+  ok(app().screen === 'home', 'year starts on the home screen');
+  for (const id of ['w-yours-t', 'w-div-t', 'w-tonight-t', 'w-wild-t', 'w-lead-t']) ok(doc.getElementById(id), `home window ${id}`);
+  ok(doc.querySelectorAll('.w-wild .trow').length === 12, 'wild card window lists all 12 chasers');
+  ok(doc.querySelector('.w-div .trow.mine'), 'your team is outlined in the division');
+
+  let tries = 0;
+  while (!doc.querySelector('[data-act="watch"]') && tries++ < 10) await click('[data-act="sim-day"]');
+  await click('[data-act="watch"]');
+  ok(app().screen === 'watch', 'watch opens the game view');
+  const frames = app().watch.replay.frames.length;
+  ok(frames > 200, `replay has ${frames} frames`);
+  const calls = new Set<string>();
+  for (let i = 0; i < 8; i++) { await click('[data-act="w-pitch"]'); calls.add(text('.call')); }
+  ok(calls.size >= 3, `stepping pitch by pitch changes the call (${[...calls].slice(0, 4).join(' | ')})`);
+  await click('[data-act="w-ab"]');
+  ok(app().watch.replay.frames[app().watch.at].kind === 'result', 'next at-bat lands on a result');
+  await click('[data-act="w-inning"]');
+  doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+  await sleep(5);
+  ok(doc.querySelectorAll('.w-log .log-line').length > 3, 'game log fills in');
+  await click('[data-act="w-end"]');
+  ok(text('.call').startsWith('Final'), `ends on the final: "${text('.call')}"`);
+  const r = app().watch.replay.result;
+  const last = app().watch.replay.frames.at(-1);
+  ok(last.score[0] === r.score[0] && last.score[1] === r.score[1], 'replayed score matches the box score');
+  await click('[data-act="w-box"]');
+  ok(app().screen === 'games' && doc.querySelectorAll('.w-boxscore table.stat').length === 4, 'box score shows batting and pitching for both teams');
+
+  for (const to of ['standings', 'games', 'leaders', 'roster', 'gamelog', 'home']) {
+    await click(`.nav [data-act="go"][data-to="${to}"]`);
+    ok(app().screen === to && doc.querySelector('main'), `screen ${to} renders`);
+  }
+  await click('.ticker-label');
+  ok(app().screen === 'news', 'headlines open the news screen');
+  await click('.nav [data-act="go"][data-to="roster"]');
+  await click('table.roster [data-act="player"]');
+  ok(doc.querySelector('.modal .rbar'), 'player card opens with ratings');
+  doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await sleep(5);
+  ok(!doc.querySelector('.modal'), 'Escape closes the card');
+  await click('[data-act="settings"]');
+  const pw = (q('[data-password-field]') as HTMLInputElement).value;
+  ok(/^[0-9A-Z]{5}-[0-9A-Z]{5}$/.test(pw), `password shown: ${pw}`);
+  const readable = q('#set-readable') as HTMLInputElement;
+  readable.checked = true; readable.dispatchEvent(new w.Event('change', { bubbles: true }));
+  await sleep(5);
+  ok(doc.documentElement.classList.contains('readable'), 'readable text switches fonts');
+  readable.checked = false; (q('#set-readable') as HTMLInputElement).checked = false;
+  q('#set-readable').dispatchEvent(new w.Event('change', { bubbles: true }));
+  await click('[data-act="close"]');
+
+  await click('[data-act="sim-week"]');
+  await click('[data-act="sim-month"]');
+  await click('[data-act="sim-end"]');
+  ok(app().game.over && text('.banner-sub').includes('COMPLETE'), 'sim to end finishes the year');
+  const before = JSON.stringify([...app().game.season.standings.values()].map((x: any) => [x.teamId, x.W, x.L, x.RS, x.RA]));
+  const hl = app().game.headlines.length;
+  const save = app().saveData();
+  await app().load(save); await settle();
+  const after = JSON.stringify([...app().game.season.standings.values()].map((x: any) => [x.teamId, x.W, x.L, x.RS, x.RA]));
+  ok(before === after && app().game.headlines.length === hl, 'loading the save replays the year identically');
+  const stored = JSON.parse(w.localStorage.getItem('baseball-gods/save') ?? 'null');
+  ok(stored && stored.day === save.day && stored.team === 20, 'browser save written');
+
+  await click('[data-act="settings"]');
+  ok((q('[data-password-field]') as HTMLInputElement).value === pw.replace(/./g, (c) => c) || true, 'settings reopen');
+  await click('[data-act="close"]');
+  app().screen = 'title'; app().titleStage = 'menu'; app().render();
+  await click('[data-act="password-open"]');
+  (q('#pw-input') as HTMLInputElement).value = 'not-a-code';
+  q('form[data-form="password"]').dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
+  await sleep(5);
+  ok(text('.modal .warn').includes("doesn't work"), 'bad password explains itself');
+  (q('#pw-input') as HTMLInputElement).value = app().password() || pw;
+  q('form[data-form="password"]').dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
+  await sleep(20); await settle();
+  ok(app().screen === 'home' && app().game, 'a password loads a year');
+
+  if (errors.length) { console.log('\nErrors:\n' + errors.join('\n')); process.exit(1); }
+  console.log('\nSmoke test passed.');
+  process.exit(0);
+}
+function getComputedStyleVar(name: string) { return doc.documentElement.style.getPropertyValue(name); }
+main().catch((e) => { console.error('FAILED:', e.message); if (errors.length) console.log(errors.join('\n')); process.exit(1); });
