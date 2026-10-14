@@ -10,14 +10,15 @@ import { DIVISIONS, LEAGUES, teamColors, teamName } from '../teams';
 import { banner, btn, esc, r5 } from './common';
 
 export function titleView(app: App): string {
-  const s = app.saved;
+  const s = app.continueInfo();
   const menu = app.titleStage === 'press'
     ? '<p class="press" aria-live="polite">PRESS ANY KEY</p>'
     : `<section class="win menu" aria-label="Main menu"><span class="studs" aria-hidden="true"></span><ul class="menu-list">
-${s ? `<li><button type="button" class="menu-item" data-act="continue" data-key="continue" data-autofocus><span class="mi-main">CONTINUE</span><span class="mi-sub">Year 1 · ${esc(teamName(s.team))} · day ${s.day + 1}</span></button></li>` : ''}
+${s ? `<li><button type="button" class="menu-item" data-act="continue" data-key="continue" data-autofocus><span class="mi-main">CONTINUE</span><span class="mi-sub">Year ${s.year} · ${esc(teamName(s.team))} · day ${s.day + 1}</span></button></li>` : ''}
 <li><button type="button" class="menu-item" data-act="new-league" data-key="new-league"${s ? '' : ' data-autofocus'}><span class="mi-main">NEW LEAGUE</span><span class="mi-sub">Thirty fresh teams. Pick one.</span></button></li>
+<li><button type="button" class="menu-item" data-act="load-file-pick" data-key="load-file-pick"><span class="mi-main">LOAD FROM FILE</span><span class="mi-sub">${s ? 'A saved league file. It replaces the league in this browser.' : 'A league you saved to a file'}</span></button></li>
 <li><button type="button" class="menu-item" data-act="password-open" data-key="password-open"><span class="mi-main">ENTER PASSWORD</span><span class="mi-sub">Pick up a year from another device</span></button></li>
-</ul></section>`;
+</ul><input type="file" accept=".zip,application/zip" data-act="load-file" hidden aria-hidden="true" tabindex="-1">${app.fileMsg ? `<p class="warn menu-msg" role="alert">${esc(app.fileMsg)}</p>` : ''}</section>`;
   return `<div class="frame screen-title"><div class="title-block"><h1 class="title-logo">Baseball Gods</h1>
 <p class="title-sub">A BASEBALL SIM. THE RULES ANSWER TO HIGHER POWERS.</p>${menu}</div></div>`;
 }
@@ -115,10 +116,21 @@ function settingsModal(app: App): string {
 <label class="field short"><span class="k">LOOP END (S)</span><input name="loopEnd" id="music-le" type="number" min="0" step="0.01" placeholder="end"></label>
 <label class="field file"><span class="k">TRACK (OGG, MP3, WAV)</span><input type="file" id="music-file" accept="audio/*,.ogg,.mp3,.wav" data-act="music-file"></label>
 </form><div class="row-actions">${btn('STOP MUSIC', 'music-stop')}</div>${app.musicMsg ? `<p class="note" role="status">${esc(app.musicMsg)}</p>` : ''}</div>
+${app.game ? `<div class="set-group"><h3>SAVES</h3><p class="note small">${saveNote(app)} A save file holds the whole league: back it up, or load it on another device from the title screen.</p>
+<div class="row-actions">${btn('SAVE TO FILE', 'export-file')}</div></div>` : ''}
 ${pw ? `<div class="set-group"><h3>YOUR PASSWORD</h3><p class="note small">This browser saves automatically. The password brings this year back on any device: enter it from the title screen.</p>
 <div class="pw-row"><input class="pw" readonly value="${pw}" data-password-field aria-label="Password" id="pw-field">${btn('COPY', 'copy-password')}</div></div>` : ''}
 <div class="set-group"><h3>LEAGUE</h3>${restart}</div>`;
   return modal('set-t', 'Settings', body, true);
+}
+
+function saveNote(app: App): string {
+  switch (app.storage) {
+    case 'persistent': return 'This browser saves your league automatically, and it has agreed to keep it.';
+    case 'kept': return 'This browser saves your league automatically. Browsers can clear saved data for sites you haven\'t visited in a while (Safari after about a week), so keep a file too.';
+    case 'none': return 'This browser won\'t store the full league here (a private window, or storage is off). It keeps a short replay save instead, and the year replays from it when you continue. Save a file to keep everything.';
+    default: return 'This browser saves your league automatically.';
+  }
 }
 
 function passwordModal(app: App): string {

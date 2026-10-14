@@ -9,7 +9,10 @@ import { generateLeague } from '../engine/generate';
 import { Music } from './audio';
 import { BASE_SPOTS, FIELD_SPOTS, drawFigures, renderBallpark, type Figure } from './ballpark';
 import { buildReplay, nextAtBat, nextInning, type Replay } from './replay';
+import { offerFile } from './download';
+import { SaveError, decodeSave, encodeSave, saveFileName, type SaveMeta } from './savefile';
 import { Game, SAVE_VERSION, clearSave, fromPassword, newSeed, readSave, toPassword, writeSave, type SaveData } from './state';
+import { SLOT, deleteLeague, getLeague, putLeague, requestPersistence } from './store';
 import { applyTeamColors, teamColors, teamName } from './teams';
 import { view } from './views';
 
@@ -28,7 +31,13 @@ export class App {
   modal: Modal | null = null;
   game: Game | null = null;
   settings: Settings = { readable: false, detail: 'final', music: true, volume: 0.7 };
+  /** The league in this browser's database slot, if any. */
+  slot: SaveMeta | null = null;
+  /** An old-style save (seed, team, day; replayed to load), from before full saves or when the database is unavailable. */
   saved: SaveData | null = null;
+  /** Where autosaves go: the database (kept, or kept unless the browser clears it), or only the old replay save. */
+  storage: 'persistent' | 'kept' | 'none' | 'unknown' = 'unknown';
+  fileMsg = '';
   picker: { seed: number; league: League; team: number } | null = null;
   watch: Watch | null = null;
   gamesDay = -1;
@@ -52,6 +61,9 @@ export class App {
   private parkKey = '';
   private parkBase: { key: string; px: Uint8ClampedArray } | null = null;
   private stickLog = false;
+  private saving: Promise<void> | null = null;
+  private dirty = false;
+  private persistAsked = false;
 
   constructor(root: HTMLElement, canvas: HTMLCanvasElement) {
     this.root = root;
@@ -78,8 +90,11 @@ export class App {
 
   /** Boot, optionally resuming a save (used when the page is updated while open). */
   async start(resume?: { save?: SaveData; screen?: Screen }): Promise<void> {
+    const row = await getLeague(SLOT);
+    this.slot = row?.meta ?? null;
+    if (this.slot) applyTeamColors(teamColors(this.slot.team));
     if (resume?.save) {
-      await this.load(resume.save);
+      if (this.slot) await this.loadSlot(); else await this.load(resume.save);
       if (resume.screen && resume.screen !== 'title' && resume.screen !== 'picker' && resume.screen !== 'watch') this.screen = resume.screen;
       this.render();
       return;
@@ -97,11 +112,67 @@ export class App {
   }
   password(): string { return this.game ? toPassword(this.saveData()) : ''; }
 
+  /** Autosave: the whole league to the database slot, after the screen has updated. Saves queue up; only the latest is written. */
   private persist() {
     if (!this.game) return;
-    const s = this.saveData();
-    writeSave(s);
-    this.saved = s;
+    this.dirty = true;
+    if (!this.saving) this.saving = this.flush().finally(() => { this.saving = null; });
+  }
+  private async flush(): Promise<void> {
+    while (this.dirty && this.game) {
+      this.dirty = false;
+      const g = this.game;
+      await tick();
+      let ok = false;
+      try {
+        const { bytes, meta } = await encodeSave(g); // the snapshot is taken before its first await, so simming on is safe
+        if (this.game !== g) continue;
+        ok = await putLeague(SLOT, bytes, meta);
+        if (ok) { this.slot = meta; this.saved = null; clearSave(); }
+      } catch { ok = false; }
+      if (!ok) { const s = this.saveData(); writeSave(s); this.saved = s; this.storage = 'none'; continue; }
+      if (!this.persistAsked) { this.persistAsked = true; this.storage = (await requestPersistence()) ? 'persistent' : 'kept'; }
+      else if (this.storage === 'none' || this.storage === 'unknown') this.storage = 'kept';
+    }
+  }
+  /** Resolves when every queued autosave is written (tests use it). */
+  whenSaved(): Promise<void> { return this.saving ?? Promise.resolve(); }
+
+  /** What CONTINUE would open: the database slot, else an old-style save. */
+  continueInfo(): { team: number; year: number; day: number } | null {
+    return this.slot ? { team: this.slot.team, year: this.slot.year, day: this.slot.day } : this.saved ? { team: this.saved.team, year: 1, day: this.saved.day } : null;
+  }
+
+  /** Open the league in the database slot. */
+  async loadSlot(): Promise<boolean> {
+    const row = await getLeague(SLOT);
+    if (!row) { this.slot = null; return false; }
+    try { await this.openSave(row.bytes, 'Opening your league'); return true; }
+    catch (e) { this.fileMsg = e instanceof SaveError ? `Couldn't open the saved league: ${e.message}` : "Couldn't open the saved league."; return false; }
+  }
+  private async openSave(bytes: Uint8Array, label: string): Promise<void> {
+    let g: Game | null = null;
+    await this.withBusy(label, 1, false, async () => { await tick(); g = (await decodeSave(bytes)).game; });
+    this.game = g!;
+    this.afterLoad();
+    this.screen = 'home';
+  }
+  /** Load a save file chosen by the player; it becomes the league in this browser. */
+  async loadFile(file: File): Promise<void> {
+    this.fileMsg = '';
+    try {
+      await this.openSave(new Uint8Array(await file.arrayBuffer()), 'Opening the file');
+      this.persist();
+    } catch (e) {
+      this.fileMsg = e instanceof SaveError ? e.message : "Couldn't read that file.";
+    }
+    this.render();
+  }
+  async exportFile(): Promise<void> {
+    if (!this.game) return;
+    const { bytes, meta } = await encodeSave(this.game);
+    const r = await offerFile(saveFileName(meta), bytes, 'application/zip');
+    this.showToast(r === 'saved' ? 'Save file ready' : r === 'declined' ? 'Not saved' : "Couldn't save a file here");
   }
   private saveSettings() {
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings)); } catch { /* fine */ }
@@ -359,7 +430,8 @@ export class App {
     const el = e.target as HTMLInputElement | HTMLSelectElement;
     const act = el.dataset.act;
     if (!act) return;
-    if (act === 'roster-team') { this.rosterTeam = Number(el.value); this.render(); }
+    if (act === 'load-file') { const f = (el as HTMLInputElement).files?.[0]; (el as HTMLInputElement).value = ''; if (f) void this.loadFile(f); }
+    else if (act === 'roster-team') { this.rosterTeam = Number(el.value); this.render(); }
     else if (act === 'set-readable') { this.settings.readable = (el as HTMLInputElement).checked; document.documentElement.classList.toggle('readable', this.settings.readable); this.saveSettings(); this.parkKey = ''; this.render(); }
     else if (act === 'set-music') { this.settings.music = (el as HTMLInputElement).checked; this.music.setEnabled(this.settings.music); this.saveSettings(); }
     else if (act === 'set-volume') { this.settings.volume = Number(el.value) / 100; this.music.setVolume(this.settings.volume); this.saveSettings(); }
@@ -418,7 +490,7 @@ export class App {
       case 'new-league': {
         const seed = newSeed();
         const league = generateLeague(seed);
-        this.picker = { seed, league, team: this.saved?.team ?? 1 };
+        this.picker = { seed, league, team: this.continueInfo()?.team ?? 1 };
         applyTeamColors(teamColors(this.picker.team));
         this.screen = 'picker';
         this.modal = null;
@@ -445,9 +517,12 @@ export class App {
         return;
       }
       case 'continue': {
-        if (this.saved) { await this.load(this.saved); this.render(); }
+        if (this.slot) { if (!(await this.loadSlot())) { this.screen = 'title'; } this.render(); }
+        else if (this.saved) { await this.load(this.saved); this.render(); }
         return;
       }
+      case 'load-file-pick': this.root.querySelector<HTMLInputElement>('[data-act="load-file"]')?.click(); return;
+      case 'export-file': await this.exportFile(); return;
       case 'to-title': {
         this.screen = 'title'; this.titleStage = 'menu'; this.picker = null;
         if (g) applyTeamColors(teamColors(g.userTeam));
@@ -510,7 +585,8 @@ export class App {
       case 'restart-disarm': this.restartArmed = false; this.render(); return;
       case 'restart-confirm': {
         clearSave();
-        this.saved = null;
+        await deleteLeague(SLOT);
+        this.saved = null; this.slot = null;
         this.game = null;
         this.restartArmed = false;
         await this.act('new-league', {});

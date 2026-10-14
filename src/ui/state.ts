@@ -29,13 +29,15 @@ export class Game {
   /** Result indices (into season.results) by calendar day. */
   readonly byDay = new Map<number, number[]>();
 
-  constructor(seed: number, userTeam: number, league?: League) {
+  /** A new league, or (with `season`) one restored from a save. */
+  constructor(seed: number, userTeam: number, league?: League, season?: Season) {
     this.seed = seed;
     this.userTeam = userTeam;
-    this.league = league ?? generateLeague(seed);
-    this.season = createSeason(this.league, PARAMS, { year: 1, seed, logs: true });
+    this.season = season ?? createSeason(league ?? generateLeague(seed), PARAMS, { year: 1, seed, logs: true });
+    this.league = this.season.league;
     this.players = this.season.players;
     for (const t of this.league.teams) for (const id of t.playerIds) this.teamOf.set(id, t.id);
+    this.season.results.forEach((g, i) => { const a = this.byDay.get(g.day) ?? []; a.push(i); this.byDay.set(g.day, a); });
   }
 
   get day() { return this.season.day; }

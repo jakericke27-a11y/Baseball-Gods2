@@ -13,8 +13,10 @@ and decision cards that pause the sim at big moments. All play happens in the br
 - `src/engine/` is pure logic: no DOM, no UI imports. It runs in Node (tests, calibration)
   and in a browser Web Worker (the game) with the same code.
 - All randomness goes through a seeded `Rng`. Same seed → identical season, byte for byte.
-- Saves: IndexedDB in the browser + export/import to a file (Safari can clear site data
-  after 7 days without a visit, so file export is not optional).
+- Saves: the whole league as one .zip (`save.json` + `logs.bin`), the same bytes in IndexedDB (one slot
+  today, `slot1`; built for more) and in an exported file. Loading never replays, so saves survive engine
+  changes; formats upgrade on load (`engine/snapshot.ts`, `ui/savefile.ts`). Safari can clear site data
+  after 7 days without a visit, so file export is not optional, and the game asks for persistent storage.
 
 ## At-bat model (pitch by pitch) — `src/engine/atbat/`
 Each pitch: location (zone/heart/edge/chase) → swing decision → contact → foul or fair →
@@ -141,6 +143,12 @@ New-engine guards: runs vs BaseRuns check, RBI ≤ R, per-team start limits by r
   size and final name, `guides/`, README, `slots.json`, a ready `manifest.json`), so new slots join the kit on their
   own. UI icons and the ballpark stay code-drawn, not slots, for now. The published page needs the `downloads`
   capability for the button; elsewhere it's a plain browser download.
+- 2026-10-14 — Saves hold the full league state (step 1.1): a season snapshot (RNG state included) restores and
+  plays on exactly as if it never stopped. One autosaved league per browser for now (three slots later), written to
+  IndexedDB after each action; SAVE TO FILE in Settings and LOAD FROM FILE on the title screen move it between
+  devices. A profile store (IndexedDB `profile`) is ready for what outlives a league. The 10-character password
+  stays as it was (seed, team, day; replayed). Without a database (private windows, a headless DOM) the autosave
+  falls back to that replay save. Old saves replay once, then become full saves.
 
 ## Design philosophy (2026-10-03)
 Realistic baseline; the fun is in finding combinations that BREAK it (ratings + abilities + favor +

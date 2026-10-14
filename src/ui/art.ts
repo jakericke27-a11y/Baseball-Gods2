@@ -11,6 +11,9 @@
  * The clubhouse is plain JS appended after the game, so the registry is also on window.__bgArt.
  */
 
+import { offerFile } from './download';
+import { zip } from './zip';
+
 export interface ArtSlotDef {
   /** File name without .png: lowercase letters, digits and underscores. */
   id: string;
@@ -123,37 +126,6 @@ export function kitReadme(l: KitListing, guideNames: string[]): string {
   ].join('\n');
 }
 
-const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
-export function crc32(b: Uint8Array): number { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC[(c ^ b[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
-
-/** A plain (stored, uncompressed) zip. PNGs are already compressed. */
-export function zip(files: Array<{ name: string; data: Uint8Array }>): Uint8Array {
-  const enc = new TextEncoder(), parts: Uint8Array[] = [], central: Uint8Array[] = [];
-  let off = 0;
-  for (const f of files) {
-    const name = enc.encode(f.name), crc = crc32(f.data), n = f.data.length;
-    const lh = new DataView(new ArrayBuffer(30));
-    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
-    lh.setUint16(10, 0, true); lh.setUint16(12, 0x21, true); // 1980-01-01, a fixed date keeps kits identical
-    lh.setUint32(14, crc, true); lh.setUint32(18, n, true); lh.setUint32(22, n, true); lh.setUint16(26, name.length, true);
-    parts.push(new Uint8Array(lh.buffer), name, f.data);
-    const ch = new DataView(new ArrayBuffer(46));
-    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
-    ch.setUint16(14, 0x21, true); ch.setUint32(16, crc, true); ch.setUint32(20, n, true); ch.setUint32(24, n, true);
-    ch.setUint16(28, name.length, true); ch.setUint32(42, off, true);
-    central.push(new Uint8Array(ch.buffer), name);
-    off += 30 + name.length + n;
-  }
-  const cdSize = central.reduce((a, p) => a + p.length, 0);
-  const end = new DataView(new ArrayBuffer(22));
-  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
-  end.setUint32(12, cdSize, true); end.setUint32(16, off, true);
-  const all = [...parts, ...central, new Uint8Array(end.buffer)];
-  const out = new Uint8Array(all.reduce((a, p) => a + p.length, 0));
-  let at = 0; for (const p of all) { out.set(p, at); at += p.length; }
-  return out;
-}
-
 /** Slot ids with published art: listed in art/manifest.json and the file loads. */
 export async function publishedArt(base = 'art/'): Promise<Set<string>> {
   const out = new Set<string>();
@@ -192,25 +164,8 @@ export async function buildKit(published?: ReadonlySet<string>): Promise<Kit> {
 
 export const KIT_FILE = 'baseball-gods-art-kit.zip';
 
-/** Hand the kit to the viewer: the published page's downloads capability, else a plain browser download. */
-export async function saveKit(kit: Kit): Promise<'saved' | 'declined' | 'failed'> {
-  const blob = new Blob([kit.bytes as BlobPart], { type: 'application/zip' });
-  const claude = (window as unknown as { claude?: { use?: (n: string) => Promise<unknown> } }).claude;
-  if (claude?.use) {
-    const dl = await claude.use('downloads').catch(() => null) as { save(r: { filename: string; data: Blob }): Promise<unknown> } | null;
-    if (dl) {
-      try { await dl.save({ filename: KIT_FILE, data: blob }); return 'saved'; }
-      catch (e) { const code = (e as { code?: string }).code; if (code === 'declined') return 'declined'; if (code === 'rate_limited' || code === 'too_large' || code === 'rejected_extension') return 'failed'; }
-    }
-  }
-  try {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = KIT_FILE;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 30000);
-    return 'saved';
-  } catch { return 'failed'; }
-}
+/** Hand the kit to the viewer. */
+export const saveKit = (kit: Kit) => offerFile(KIT_FILE, kit.bytes, 'application/zip');
 
 export const artApi = { slot: artSlot, slots: artSlots, get: getArtSlot, guide: artGuide, guides: artGuides, blockHtml, colorBlock, publishedArt, buildKit, saveKit };
 if (typeof window !== 'undefined') (window as unknown as { __bgArt?: typeof artApi }).__bgArt = artApi;

@@ -106,8 +106,10 @@ async function main() {
   await app().load(save); await settle();
   const after = JSON.stringify([...app().game.season.standings.values()].map((x: any) => [x.teamId, x.W, x.L, x.RS, x.RA]));
   ok(before === after && app().game.headlines.length === hl, 'loading the save replays the year identically');
+  await app().whenSaved();
+  // A headless DOM has no database, so the autosave falls back to the replay save (full saves are checked in Chromium).
   const stored = JSON.parse(w.localStorage.getItem('baseball-gods/save') ?? 'null');
-  ok(stored && stored.day === save.day && stored.team === 20, 'browser save written');
+  ok(stored && stored.day === save.day && stored.team === 20 && app().storage === 'none', 'browser save written (replay fallback without a database)');
 
   await click('[data-act="settings"]');
   ok((q('[data-password-field]') as HTMLInputElement).value === pw.replace(/./g, (c) => c) || true, 'settings reopen');

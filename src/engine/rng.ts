@@ -9,7 +9,10 @@ export interface Rng {
   normal(): number;
   /** Integer in [0, n). */
   int(n: number): number;
+  /** The generator's whole state, for saves: four words plus the spare normal draw. */
+  state(): RngState;
 }
+export type RngState = [number, number, number, number, number | null];
 
 function splitmix32(seed: number): () => number {
   let s = seed >>> 0;
@@ -22,10 +25,12 @@ function splitmix32(seed: number): () => number {
   };
 }
 
-export function createRng(seed: number): Rng {
+/** A generator from a seed, or picking up exactly where a saved state left off. */
+export function createRng(seed: number, from?: RngState): Rng {
   const init = splitmix32(seed);
   let a = init(), b = init(), c = init(), d = init();
   let spare: number | null = null;
+  if (from) [a, b, c, d, spare] = from;
 
   const nextU32 = (): number => {
     const r = Math.imul(rotl(Math.imul(b, 5), 7), 9) >>> 0;
@@ -40,6 +45,7 @@ export function createRng(seed: number): Rng {
 
   return {
     next,
+    state: () => [a, b, c, d, spare],
     int: (n: number) => Math.floor(next() * n),
     normal(): number {
       if (spare !== null) { const s = spare; spare = null; return s; }

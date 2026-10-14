@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { artSlot, artSlots, blockColor, blockHtml, crc32, kitListing, kitReadme, zip } from '../src/ui/art';
+import { artSlot, artSlots, blockColor, blockHtml, kitListing, kitReadme } from '../src/ui/art';
+import { crc32, unzip, zip } from '../src/ui/zip';
 
 describe('art slots', () => {
   it('a registered slot gets a color and shows up in the kit listing', () => {
@@ -42,5 +43,16 @@ describe('the kit zip', () => {
     expect(v.getUint16(end + 10, true)).toBe(2);
     const cd = v.getUint32(end + 16, true);
     expect(v.getUint32(cd, true)).toBe(0x02014b50);
+  });
+  it('reads back what it writes, stored or deflated', async () => {
+    const enc = new TextEncoder(), big = enc.encode('baseball '.repeat(5000));
+    const files = [{ name: 'a.txt', data: enc.encode('hello') }, { name: 'dir/b.bin', data: big }];
+    for (const z of [zip(files), await zip(files, true)]) {
+      const back = await unzip(z);
+      expect(new TextDecoder().decode(back.get('a.txt'))).toBe('hello');
+      expect(back.get('dir/b.bin')).toEqual(big);
+    }
+    expect((await zip(files, true)).length).toBeLessThan(big.length / 10);
+    await expect(unzip(enc.encode('nope'))).rejects.toThrow();
   });
 });

@@ -310,6 +310,7 @@ details.half[open] summary::before { content: '-'; }
 @keyframes blink { 50% { opacity: 0; } }
 .menu { width: min(480px, 100%); margin-top: 8px; text-align: left; background: var(--solid); }
 .menu-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.menu-msg { margin: 12px 4px 0; max-width: 34ch; }
 .menu-item { position: relative; width: 100%; display: grid; gap: 4px; padding: 10px 14px 10px 52px; background: transparent; border: 4px solid transparent; color: var(--text); text-align: left; cursor: pointer; }
 .menu-item:hover, .menu-item:focus-visible { background: var(--hi); border-color: var(--frame); outline: none; }
 .menu-item:hover::before, .menu-item:focus-visible::before { content: ''; position: absolute; left: 12px; top: 50%; width: 27px; height: 27px; margin-top: -14px; background: var(--ball) center / contain no-repeat; image-rendering: pixelated; }
