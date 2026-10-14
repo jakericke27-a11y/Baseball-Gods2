@@ -293,6 +293,9 @@ for (const room of Object.values(ROOMS)) {
   for (const t of room.things) if (!SLOTS.has(t.slot)) SLOTS.set(t.slot, { id: t.slot, kind: t.wall ? 'wall' : t.floor ? 'flat' : 'object', w: t.size[0], h: t.size[1], title: t.label || t.id.replace(/_/g, ' '), room: room.id, thing: t });
   for (const n of room.npcs) if (!SLOTS.has(n.sheet)) SLOTS.set(n.sheet, { id: n.sheet, kind: 'sheet', w: 64, h: 128, title: n.name + ' (walk sheet)', room: room.id });
 }
+// every slot also goes in the game's art registry (src/ui/art.ts), which builds the art kit
+const REG = window.__bgArt || null;
+if (REG) for (const s of SLOTS.values()) REG.slot({ id: s.id, w: s.w, h: s.h, label: s.title, group: 'clubhouse', place: s.room ? ROOMS[s.room].name : undefined, kind: s.kind, draw: () => standIn(s.id) });
 
 const ART = {
   published: new Map(),   // slot -> image (art/ folder)
@@ -1368,6 +1371,20 @@ function renderSay(full) {
 
 /* ---------------------------------------------------------------- panels (dashboard windows and art) */
 let artStatus = '';
+let kitBusy = false;
+async function downloadKit() {
+  if (!REG || kitBusy) return;
+  kitBusy = true; artStatus = 'Packing the art kit…'; renderArtPanel();
+  try {
+    const kit = await REG.buildKit();
+    const n = kit.listing.waiting.length, done = kit.listing.published.length;
+    const what = `${n} slot${n === 1 ? '' : 's'} waiting for art${done ? `, ${done} already in the game` : ''}`;
+    const r = await REG.saveKit(kit);
+    artStatus = r === 'saved' ? `Art kit saved: ${what}.` : r === 'declined' ? 'Art kit not saved.' : `Couldn't save the art kit here (${what}).`;
+  } catch (e) { artStatus = "Couldn't pack the art kit."; }
+  kitBusy = false;
+  if (S.panel === 'art') renderArtPanel(); else note(artStatus, 5000);
+}
 function openPanel(kind, node) {
   stopPath(); S.steer = null; S.keys.clear(); S.panel = kind;
   elVeil.innerHTML = ''; elVeil.appendChild(node); elVeil.hidden = false;
@@ -1404,8 +1421,8 @@ function renderArtPanel() {
   node.innerHTML = `<section class="win hub-art" aria-label="Try new art"><span class="studs" aria-hidden="true"></span>
 <header class="win-head"><h2 class="win-title">Try new art</h2><span class="win-label">${esc(rm.name.toUpperCase())}</span></header>
 <div class="win-body scroll">
-<p>Drop PNG files anywhere on the clubhouse, or pick them here. Name each file after its slot below, like <b>player.png</b>. Your art shows up right away and stays in this browser only.</p>
-<div class="row"><button type="button" class="btn btn-primary" data-hub="pick"><span>PICK FILES</span></button><button type="button" class="btn btn-ghost${S.grid ? ' on' : ''}" data-hub="grid" aria-pressed="${S.grid}"><span>GRID (G)</span></button><button type="button" class="btn btn-ghost${all ? ' on' : ''}" data-hub="all" aria-pressed="${all}"><span>ALL ROOMS</span></button><button type="button" class="btn btn-secondary" data-hub="clear-art"><span>CLEAR TEST ART</span></button></div>
+<p>Drop PNG files anywhere on the clubhouse, or pick them here. Name each file after its slot below, like <b>player.png</b>. Your art shows up right away and stays in this browser only.${REG ? ' DOWNLOAD ART KIT packs every slot still waiting for art, at its exact size and file name, with labeled guides.' : ''}</p>
+<div class="row"><button type="button" class="btn btn-primary" data-hub="pick"><span>PICK FILES</span></button><button type="button" class="btn btn-ghost${S.grid ? ' on' : ''}" data-hub="grid" aria-pressed="${S.grid}"><span>GRID (G)</span></button><button type="button" class="btn btn-ghost${all ? ' on' : ''}" data-hub="all" aria-pressed="${all}"><span>ALL ROOMS</span></button><button type="button" class="btn btn-secondary" data-hub="clear-art"><span>CLEAR TEST ART</span></button>${REG ? `<button type="button" class="btn btn-secondary" data-hub="kit"${kitBusy ? ' disabled' : ''}><span>${kitBusy ? 'PACKING…' : 'DOWNLOAD ART KIT'}</span></button>` : ''}</div>
 <p class="hub-art-status" role="status">${esc(artStatus)}</p>
 <div class="hub-slots"><div class="h">FILE</div><div class="h">SIZE</div><div class="h st">NOW</div>${rows}</div>
 </div></section><div class="hub-panel-bar"><button type="button" class="btn btn-secondary" data-hub="close"><span>CLOSE</span></button></div>`;
@@ -1616,6 +1633,7 @@ function onUiClick(e) {
   else if (what === 'pick') fileInput.click();
   else if (what === 'grid') { S.grid = !S.grid; save(); renderArtPanel(); }
   else if (what === 'all') { renderArtPanel.all = !renderArtPanel.all; renderArtPanel(); }
+  else if (what === 'kit') downloadKit();
   else if (what === 'clear-art') { clearTestArt().then(() => { artStatus = 'Test art cleared. Stand-ins are back.'; renderArtPanel(); }); }
 }
 
@@ -1706,13 +1724,12 @@ function boot(tries = 0) {
 }
 
 /* ================================================================ templates for the art kit and a test handle */
-function templates() {
+let guideCache = null;
+function guideCanvases() {
+  if (guideCache) return guideCache;
   const out = {};
   const scaled = (src, k) => { const c = cv(src.width * k, src.height * k), x = c.getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(src, 0, 0, c.width, c.height); return c; };
   const font = (px) => `${px}px 'Determination Mono', 'Courier New', monospace`;
-  out['player.png'] = standIn('player');
-  out['npc_sal.png'] = standIn('npc_sal');
-  for (const s of SLOTS.values()) if (s.kind !== 'sheet') out[`${s.id}.png`] = standIn(s.id);
   // the walk sheet guide
   {
     const k = 8, src = standIn('player'), g = scaled(src, k), pad = 120, top = 56;
@@ -1782,6 +1799,16 @@ function templates() {
     }
     out['guide_things.png'] = c;
   }
+  guideCache = out;
+  return out;
+}
+const GUIDE_NAMES = ['guide_player_sheet', ...Object.keys(ROOMS).map((id) => 'guide_room_' + id), 'guide_things'];
+if (REG) for (const n of GUIDE_NAMES) REG.guide(n, () => guideCanvases()[n + '.png'] || null);
+/** Every stand-in and guide as data URLs (debug handle; the ART panel's DOWNLOAD ART KIT makes the zip). */
+function templates() {
+  const out = {};
+  for (const s of SLOTS.values()) out[`${s.id}.png`] = standIn(s.id);
+  Object.assign(out, guideCanvases());
   const res = {}; for (const [k2, c] of Object.entries(out)) res[k2] = c.toDataURL('image/png');
   return res;
 }

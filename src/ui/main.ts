@@ -1,6 +1,7 @@
 /** Boot: one App on the page; if the page is updated while open, the year picks up where it was. */
 import { App, type Screen } from './app';
 import { streakCss } from './sprites';
+import './art'; // the art registry (window.__bgArt), ready before the clubhouse script runs
 import type { SaveData } from './state';
 
 interface Hot {

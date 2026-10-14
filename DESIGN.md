@@ -134,6 +134,13 @@ New-engine guards: runs vs BaseRuns check, RBI ≤ R, per-team start limits by r
   screen. Its art spec and room list live in the project's clubhouse notes.
 - 2026-10-13 — One source of truth: the build makes the published page exactly (font and clubhouse were folded back in
   from the live page). Team-mode roadmap and decisions: the project doc `team-mode-plan.md`.
+- 2026-10-14 — Color blocks until art: every picture that will become real art is an art slot in one registry,
+  `src/ui/art.ts` (`artSlot({id, w, h, label, group})`; also `window.__bgArt` for the clubhouse). A slot without a
+  code-drawn stand-in shows as a flat color block with its label (`blockHtml`, `colorBlock`). The clubhouse's 40 slots
+  and 8 guides register there. ART panel → DOWNLOAD ART KIT zips every slot without published art (stand-ins at exact
+  size and final name, `guides/`, README, `slots.json`, a ready `manifest.json`), so new slots join the kit on their
+  own. UI icons and the ballpark stay code-drawn, not slots, for now. The published page needs the `downloads`
+  capability for the button; elsewhere it's a plain browser download.
 
 ## Design philosophy (2026-10-03)
 Realistic baseline; the fun is in finding combinations that BREAK it (ratings + abilities + favor +

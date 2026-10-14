@@ -25,5 +25,7 @@ Read DESIGN.md before changing engine behavior. Keep this file short.
 - `src/engine/` never imports UI code or touches the DOM. It must run in Node.
 - All randomness goes through `Rng` (src/engine/rng.ts). Never `Math.random()`.
 - Changed a sensitivity or base in `atbat/params.ts`? Re-run calibrate, then tests.
+- New pictures (cards, Gods, logos, portraits) get an art slot: `artSlot()` in `src/ui/art.ts`, shown as a color block
+  until art arrives; the art kit picks it up on its own.
 - Record design decisions in DESIGN.md (decisions log). No separate patch/instruction docs.
 - Prefer deleting code to adding it. No speculative features.

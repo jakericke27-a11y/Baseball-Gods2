@@ -398,3 +398,9 @@ input[type="file"] { font: var(--d-s)/1.2 var(--f-data); }
 :root:not(.readable) .ttable.full .trow, :root:not(.readable) .league-col .trow, :root:not(.readable) .lead-list li,
 :root:not(.readable) .glist, :root:not(.readable) table.stat { font-size: 16px; }
 :root:not(.readable) .pw { width: 17ch; letter-spacing: 1px; }
+
+/* An art slot still waiting for art (src/ui/art.ts blockHtml): its color block with its label */
+.art-block { display: inline-flex; align-items: center; justify-content: center; overflow: hidden; vertical-align: middle;
+  box-shadow: inset -1px -1px 0 rgba(0, 0, 0, 0.35); color: #0B0F1C; font: 8px/1 'Determination Mono', 'Courier New', monospace;
+  text-align: center; image-rendering: pixelated; }
+.art-block > span { padding: 1px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
