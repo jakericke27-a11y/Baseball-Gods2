@@ -9,11 +9,13 @@ A pixel-art baseball GM sim with a pitch-by-pitch engine, playable in the browse
 
 ## Run it locally (Windows / Mac / Linux)
 1. Install Node.js LTS from nodejs.org (one time).
-2. In this folder: `npm install` (one time).
+2. In this folder: `npm ci --legacy-peer-deps` (one time).
 3. `npm run play`, then open http://localhost:5173. This builds the game and serves it, music folder included.
 
 ## Commands
 - `npm run play` — build and serve the browser game
+- Source of truth: the build makes the published page exactly (game, embedded font, clubhouse). Change the
+  source and rebuild; never edit the published page by hand.
 - `npm run build:web` — build `dist/web/index.html` (local) and `dist/web/artifact.html` (published page)
 - `npm run smoke` — build, then play through every screen and a full season in a headless browser DOM
 - `npm test` — engine checks: determinism, count rules, ratings, calibration, schedule, full-season replay

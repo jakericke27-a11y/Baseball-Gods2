@@ -18,13 +18,14 @@
   --fire: #FF8C2A; --ice: #8FD8F7; --gold: #FFD25A; --good: #6BE08A; --warn: #FFB23E; --bad: #FF7A6A; --playoff: #FF9A8A;
   /* parchment */
   --parch: #EADDB8; --parch-roll: #CDBB8E; --parch-edge: #8F7C53; --parch-shadow: #C8B482; --parch-sub: #5B4A2E;
-  /* type: blackletter titles, pixel labels, terminal numbers */
+  /* type: blackletter titles; labels and numbers in Determination Mono, a pixel font drawn on a 16px grid.
+     Sizes stay on multiples of 8px so strokes land on whole pixels (16 and 32 are crisp on every screen). */
   --f-logo: 'Jacquard 24', 'Old English Text MT', serif;
   --f-title: 'Jacquard 24', 'Old English Text MT', serif;
-  --f-label: 'Pixelify Sans', 'Courier New', monospace;
-  --f-data: 'VT323', 'Courier New', monospace;
-  --l-xs: 11px; --l-s: 13px; --l-m: 15px; --l-l: 18px;
-  --d-s: 18px; --d-m: 20px; --d-l: 24px; --d-xl: 30px; --d-xxl: 46px;
+  --f-label: 'Determination Mono', 'Courier New', monospace;
+  --f-data: 'Determination Mono', 'Courier New', monospace;
+  --l-xs: 16px; --l-s: 16px; --l-m: 16px; --l-l: 24px;
+  --d-s: 16px; --d-m: 24px; --d-l: 24px; --d-xl: 32px; --d-xxl: 48px;
   --t-win: 26px;
 }
 :root.readable {
@@ -36,7 +37,7 @@
   --t-win: 20px;
 }
 
-html { height: 100%; box-sizing: border-box; }
+html { height: 100%; box-sizing: border-box; font-synthesis: none; }
 body { height: 100%; margin: 0; overflow: hidden; background: var(--sky); color: var(--text); font: var(--d-m)/1.2 var(--f-data); }
 *, *::before, *::after { box-sizing: border-box; }
 button, input, select { font: inherit; color: inherit; }
@@ -388,3 +389,12 @@ input[type="file"] { font: var(--d-s)/1.2 var(--f-data); }
   *, *::before, *::after { animation: none !important; transition: none !important; }
   .ticker-track { overflow-x: auto; }
 }
+/* Determination Mono sizes for the few rules with literal sizes (readable mode keeps its own). */
+:root:not(.readable) .banner-top { font-size: 24px; letter-spacing: 2px; }
+:root:not(.readable) .press { font-size: 24px; }
+:root:not(.readable) .chip .k, :root:not(.readable) .rbar .k, :root:not(.readable) .lights .k { font-size: 16px; }
+:root:not(.readable) .win-label { letter-spacing: 1px; }
+/* Dense tables and lists stay at 16px; everything else reads at 24px. */
+:root:not(.readable) .ttable.full .trow, :root:not(.readable) .league-col .trow, :root:not(.readable) .lead-list li,
+:root:not(.readable) .glist, :root:not(.readable) table.stat { font-size: 16px; }
+:root:not(.readable) .pw { width: 17ch; letter-spacing: 1px; }

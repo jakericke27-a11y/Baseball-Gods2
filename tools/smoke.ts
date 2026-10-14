@@ -18,6 +18,9 @@ const dom = new JSDOM(html, {
     (w as unknown as { CSS: unknown }).CSS = { escape: (s: string) => s.replace(/["\\]/g, '\\$&') };
     w.HTMLCanvasElement.prototype.getContext = (() => null) as never;
     w.addEventListener('error', (e) => errors.push(`window: ${e.message}`));
+    // The clubhouse needs a real canvas and ResizeObserver, which a headless DOM lacks, so this run
+    // uses the dashboard (the player's own DASHBOARD choice). The clubhouse is checked in a real browser.
+    w.localStorage.setItem('baseball-gods/clubhouse', JSON.stringify({ on: false }));
   },
 });
 const w = dom.window, doc = w.document;
@@ -73,7 +76,8 @@ async function main() {
     await click(`.nav [data-act="go"][data-to="${to}"]`);
     ok(app().screen === to && doc.querySelector('main'), `screen ${to} renders`);
   }
-  await click('.ticker-label');
+  ok(doc.querySelector('.ticker .hub-back'), 'the dashboard offers the walk back to the clubhouse');
+  await click('.ticker-label:not(.hub-back)');
   ok(app().screen === 'news', 'headlines open the news screen');
   await click('.nav [data-act="go"][data-to="roster"]');
   await click('table.roster [data-act="player"]');

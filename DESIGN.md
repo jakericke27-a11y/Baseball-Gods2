@@ -127,6 +127,13 @@ New-engine guards: runs vs BaseRuns check, RBI ≤ R, per-team start limits by r
   role ~3 IP; high-stamina relievers can work back-to-back; rare superstar relievers may reach 100+ IP / 50 SV.
 - 2026-10-03 — Bounce-back arms capped at two days' rest (minDaysBetweenStarts = 3), as a dial.
 - 2026-10-03 — Triple plays (around-the-horn on grounders, liners with two on and nobody out), ~5 per season.
+- 2026-10-13 — Font: Determination Mono, embedded in the page (`src/ui/fonts/`), replaces Pixelify Sans and VT323 for
+  labels and numbers; sizes sit on multiples of 8px. Non-commercial license: swap to Pixel Operator (CC0) or Departure
+  Mono (OFL) before any public release. Readable mode still switches to Atkinson Hyperlegible.
+- 2026-10-13 — Home screen is the walkable clubhouse (`src/ui/clubhouse/`): full window, MENU and DASHBOARD reach every
+  screen. Its art spec and room list live in the project's clubhouse notes.
+- 2026-10-13 — One source of truth: the build makes the published page exactly (font and clubhouse were folded back in
+  from the live page). Team-mode roadmap and decisions: the project doc `team-mode-plan.md`.
 
 ## Design philosophy (2026-10-03)
 Realistic baseline; the fun is in finding combinations that BREAK it (ratings + abilities + favor +
@@ -182,6 +189,12 @@ approving each decision: direction → palette/type → layout/navigation → ke
 ## Engine fixes queued
 - Line-drive hits aimed at an infielder are credited to that infielder; they should go through to the outfielder
   behind (and allow gap doubles). Text already reads correctly; the attribution fix needs a recalibration.
+
+## Clubhouse (2026-10-13) — `src/ui/clubhouse/`
+Plain JS + CSS, appended to the page by the build between `<!-- clubhouse:start -->` and `<!-- clubhouse:end -->`.
+It finds the game through `window.__bg` (set in `src/ui/main.ts`), wraps `app.render`, mounts into
+`.frame.screen-home`, and opens screens through the game's own actions, so it always shows the real league.
+If it throws, it turns itself off and the dashboard shows. Art slots, rooms and controls: the project's clubhouse notes.
 
 ## First playable build (2026-10-09) — `src/ui/`
 - One page, no server: title (press any key; music starts) → pick a team (its colors dress the UI) → home.

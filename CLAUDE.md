@@ -3,6 +3,7 @@
 Read DESIGN.md before changing engine behavior. Keep this file short.
 
 ## Commands
+- `npm ci --legacy-peer-deps` — install (vitest's optional esbuild peer conflicts with the pinned esbuild)
 - `npm run play` — build the browser game and serve it at http://localhost:5173
 - `npm run smoke` — build, then script a playthrough of every screen in a headless DOM (must pass)
 - `npm test` — determinism, count rules, rating monotonicity, calibration (must pass)
@@ -17,6 +18,10 @@ Read DESIGN.md before changing engine behavior. Keep this file short.
 - `src/ui/` is the browser game: views return HTML strings; one delegated click handler in `app.ts`.
   Pixel art is drawn as grids in code (`sprites.ts`, `ballpark.ts`); any sprite can be swapped for a PNG later.
 - UI changes: run `npm run smoke`, and look at the page before calling it done.
+- The clubhouse (`src/ui/clubhouse/`) is plain JS appended by the build; it reaches the game through `window.__bg`
+  (`render`, `act`, `screen`, `game`), so keep those stable. The smoke test runs on the dashboard (no canvas in a
+  headless DOM); check the clubhouse in a real browser.
+- The build output must match what's published: never patch the published page by hand. Change the source, rebuild.
 - `src/engine/` never imports UI code or touches the DOM. It must run in Node.
 - All randomness goes through `Rng` (src/engine/rng.ts). Never `Math.random()`.
 - Changed a sensitivity or base in `atbat/params.ts`? Re-run calibrate, then tests.
