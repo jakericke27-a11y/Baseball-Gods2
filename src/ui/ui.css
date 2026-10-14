@@ -311,6 +311,30 @@ table.linescore.small { font-size: var(--d-m); }
 .roster-head .tabs { margin: 0; }
 .roster-fill > .row-actions { padding: 6px 12px; background: var(--panel); border: 4px solid var(--rule); }
 
+/* ---------------------------------------------------------------- draft room and scouting hub */
+.draft-side, .scout-side { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.scout-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 24px; align-items: start; }
+.scout-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+@media (max-width: 900px) { .scout-layout { grid-template-columns: 1fr; } }
+.board-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 14px; margin-bottom: 10px; }
+.board-filters .tabs { margin: 0; }
+.bsel { display: flex; flex-direction: column; gap: 2px; }
+.bsel select { min-height: 40px; padding: 2px 6px; background: var(--solid); color: var(--text); border: 4px solid var(--rule); font: var(--d-s)/1 var(--f-data); }
+.board-scroll { max-height: 70vh; overflow: auto; }
+.draft-board .sort { padding: 0; background: none; border: 0; color: var(--muted); font: inherit; letter-spacing: 1px; cursor: pointer; white-space: nowrap; }
+.draft-board .sort.on, .draft-board .sort:hover { color: var(--text); }
+.draft-board tr.wish { background: rgba(255, 210, 90, 0.12); }
+.draft-board tr.wish th[scope="row"] .link { color: var(--gold); }
+.star { margin-right: 6px; padding: 0 2px; background: none; border: 0; color: var(--muted); font: 16px/1 var(--f-data); cursor: pointer; }
+.star.on { color: var(--gold); }
+.wish-list li { grid-template-columns: 1.8em minmax(0, 1fr) auto; }
+.wish-list .nm { white-space: normal; }
+.wish-list li.gone .nm > .link { text-decoration: line-through; color: var(--muted); }
+.wish-moves { display: flex; gap: 2px; }
+.wish-moves .btn { min-height: 32px; padding: 0 6px; box-shadow: none; }
+.draft-recent li.fresh { animation: fresh 1.2s steps(4) 1; }
+@keyframes fresh { from { background: rgba(255, 210, 90, 0.35); } to { background: transparent; } }
+
 /* ---------------------------------------------------------------- team colors */
 .tchip { display: inline-block; width: 10px; height: 14px; margin-right: 6px; vertical-align: -2px; background: linear-gradient(var(--t1) 0 60%, var(--t2) 60% 100%); box-shadow: 0 0 0 2px rgba(5, 10, 28, 0.7); flex-shrink: 0; }
 .ttag { white-space: nowrap; color: var(--muted); }
@@ -507,10 +531,10 @@ input[type="file"] { font: var(--d-s)/1.2 var(--f-data); }
   .race-t .thead > :nth-child(4), .race-t .trow > :nth-child(4), .race-t .thead > :nth-child(6), .race-t .trow > :nth-child(6), .race-t .x { display: none; }
 }
 @media (max-width: 480px) {
-  /* eight screens and settings on one row */
+  /* nine screens and settings on one row */
   .nav { gap: 2px; padding: 4px; }
-  .icon-btn { width: 40px; height: 40px; }
-  .icon-btn svg.px { width: 32px; height: auto; }
+  .icon-btn { width: 35px; height: 40px; border-width: 3px; }
+  .icon-btn svg.px { width: 26px; height: auto; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -581,7 +605,7 @@ table.stat.roster td.acts .btn { min-height: 36px; padding: 4px 10px; }
 
 /* Draft night */
 .draft-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 24px; align-items: start; }
-@media (max-width: 900px) { .draft-layout { grid-template-columns: 1fr; } .w-clock { order: -1; } }
+@media (max-width: 900px) { .draft-layout { grid-template-columns: 1fr; } .draft-side { order: -1; } }
 .clock { margin: 0 0 4px; font: var(--d-l)/1.2 var(--f-data); color: var(--muted); }
 .clock.yours { color: var(--gold); }
 .draft-board .ceil { color: var(--gold); white-space: nowrap; }

@@ -300,6 +300,16 @@ New-engine guards: runs vs BaseRuns check, RBI ≤ R, per-team start limits by r
   (1100×640 and up) with long lists scrolling inside their windows; phones scroll the page. The scoreboard steps into
   days still to come (probables for today only). A player's season line is colored by percentile among qualified
   players (top and bottom tenth). On phones each row of tabs is one swipeable line.
+- 2026-10-14 — Draft room and scouting hub v1 (step 2.4): AI picks tick by live on draft night (slow 1.6 s, normal
+  0.7 s, fast 0.18 s; PAUSE, SKIP TO MY PICK, AUTO); the clock also pauses while a card is open. One prospect board
+  for draft night and the hub: sort any column, filter by side, position, age, NOW and CEILING, ★ to add to your draft
+  board. Your draft board lives on the league (`league.wishlist`, saved; snapshot v8) in your order, is pinned beside the
+  board on draft night with who took whom, and AUTO picks for you take its top name left (`autoPick`'s board). In the
+  founding draft a non-empty board marks the league hand-drafted (the Year 1 password can't replay it). The scouting
+  hub (new footer screen) shows the next draft class (amateurs who'll be 18–22 at the draft) or every amateur, value
+  trends over 1/2/4 years from the yearly snapshots, a draft preview (cycle record so far, the lottery ten with exact
+  top-6 odds from the weights, your projected slot), your board and your prospects. Phone footer icons shrink to fit
+  nine screens and Settings.
 
 ## Design philosophy (2026-10-03)
 Realistic baseline; the fun is in finding combinations that BREAK it (ratings + abilities + favor +

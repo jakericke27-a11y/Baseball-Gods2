@@ -146,7 +146,7 @@ export function foundingLeague(seed: number): { league: League; draft: DraftStat
     const k = i % 40;
     players.push(k < 22 ? rollPlayer(extra, nextId++, template[k]) : rollPlayer(extra, nextId++, 'P', k < 29 ? 'SP' : k < 38 ? 'RP' : 'CL'));
   }
-  const league: League = { seed, players: [], teams, amateurs: [], freeAgents: players, retired: [], nextId, history: [], env: { ...BASELINE_ENVIRONMENT }, modifiers: [], waivers: [], prospects: [], drafts: [] };
+  const league: League = { seed, players: [], teams, amateurs: [], freeAgents: players, retired: [], nextId, history: [], env: { ...BASELINE_ENVIRONMENT }, modifiers: [], wishlist: [], waivers: [], prospects: [], drafts: [] };
   seedPipeline(league);
   return { league, draft: foundingDraft(league, createRng(seed ^ 0x3c6ef372)) };
 }

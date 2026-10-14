@@ -4,7 +4,7 @@ import { DECREE_LINGER, decreeFor, decreeWinter, DECREES } from '../src/engine/d
 import { generateLeague } from '../src/engine/generate';
 import { activeModifiers, yearEnvironment } from '../src/engine/modifiers';
 import { createRng } from '../src/engine/rng';
-import { upgradeSnapshot, type SeasonSnap } from '../src/engine/snapshot';
+import { SNAPSHOT_VERSION, upgradeSnapshot, type SeasonSnap } from '../src/engine/snapshot';
 
 describe("the Gods' decree", () => {
   it('none in Year 1; one a year after that, never the same stat twice running', () => {
@@ -44,9 +44,10 @@ describe("the Gods' decree", () => {
 
   it('old saves upgrade to the baseline dials with no decrees', () => {
     const L = generateLeague(4) as unknown as Record<string, unknown>;
-    delete L.env; delete L.modifiers;
+    delete L.env; delete L.modifiers; delete L.wishlist;
     const up = upgradeSnapshot({ v: 6, league: L } as unknown as SeasonSnap);
-    expect(up.v).toBe(7);
+    expect(up.v).toBe(SNAPSHOT_VERSION);
+    expect(up.league.wishlist).toEqual([]);
     expect(up.league.env).toEqual(BASELINE_ENVIRONMENT);
     expect(up.league.modifiers).toEqual([]);
   });

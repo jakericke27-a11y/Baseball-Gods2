@@ -102,6 +102,8 @@ export interface League {
   env: LeagueEnvironment;
   /** Every modifier, past, present and coming (modifiers.ts). */
   modifiers: Modifier[];
+  /** Your draft board: the prospects you want, in your order (AUTO picks for you take from the top). */
+  wishlist: number[];
   /** Players on waivers (roster.ts). */
   waivers: Waiver[];
   /** Drafted players off the 40: the team holds their rights until the next draft (draft.ts). */

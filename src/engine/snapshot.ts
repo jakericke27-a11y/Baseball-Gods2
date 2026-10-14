@@ -18,7 +18,7 @@ import type { Season, StandingRow } from './season/season';
 import type { TeamPlan } from './season/teams';
 import type { League, TeamStrategy } from './types';
 
-export const SNAPSHOT_VERSION = 7;
+export const SNAPSHOT_VERSION = 8;
 
 type Entries<V> = Array<[number, V]>;
 
@@ -123,6 +123,8 @@ const UPGRADES: Record<number, (s: SeasonSnap) => SeasonSnap> = {
   5: (s) => { const L = s.league as Partial<League> & League; L.prospects ??= []; L.drafts ??= []; return { ...s, v: 6 }; },
   // v6 → v7: the league's own dials and modifiers. Every league so far played on the baseline, with no decrees.
   6: (s) => { const L = s.league as Partial<League> & League; L.env ??= { ...BASELINE_ENVIRONMENT }; L.modifiers ??= []; return { ...s, v: 7 }; },
+  // v7 → v8: your draft board (starts empty).
+  7: (s) => { const L = s.league as Partial<League> & League; L.wishlist ??= []; return { ...s, v: 8 }; },
 };
 
 export function upgradeSnapshot(s: SeasonSnap): SeasonSnap {

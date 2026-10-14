@@ -2,6 +2,8 @@
  * The app: which screen is up, what the player clicked, and keeping the ballpark, music and save
  * in step. Screens are HTML strings (views/); one delegated listener handles every button.
  */
+import { newBoardState, type BoardState } from './views/board';
+import { DRAFT_SPEEDS } from './views/draft';
 import { gameDays } from './views/screens';
 import type { LeadState } from './views/leaders';
 import type { PitchDetail } from '../engine/game/text';
@@ -9,7 +11,7 @@ import { regularOver } from '../engine/season/season';
 import { release, signFreeAgent, swap, toggleClaim, type MoveError } from '../engine/roster';
 import { lightingAt, type Lighting } from '../engine/season/schedule';
 import type { League } from '../engine/types';
-import { autoPicks, done, onClock, pick, type DraftState } from '../engine/draft';
+import { autoPick, autoPicks, done, onClock, pick, type DraftState } from '../engine/draft';
 import { finishFounding, foundingLeague, generateLeague } from '../engine/generate';
 import { promote } from '../engine/offseason';
 import { Music } from './audio';
@@ -22,7 +24,7 @@ import { SLOT, deleteLeague, getLeague, putLeague, requestPersistence } from './
 import { applyTeamColors, teamColors, teamName } from './teams';
 import { view } from './views';
 
-export type Screen = 'title' | 'picker' | 'draft' | 'home' | 'watch' | 'standings' | 'games' | 'leaders' | 'races' | 'roster' | 'gamelog' | 'news' | 'offseason';
+export type Screen = 'title' | 'picker' | 'draft' | 'home' | 'watch' | 'standings' | 'games' | 'leaders' | 'races' | 'scouting' | 'roster' | 'gamelog' | 'news' | 'offseason';
 export type Modal = { kind: 'settings' } | { kind: 'player'; id: number } | { kind: 'password' } | { kind: 'restart' };
 export interface Settings { readable: boolean; detail: PitchDetail; music: boolean; volume: number }
 export interface Busy { label: string; done: number; total: number; note: string; stoppable: boolean }
@@ -65,7 +67,13 @@ export class App {
   rosterTab: 'lineup' | 'staff' | 'moves' = 'lineup';
   /** The founding draft in progress (no league to play yet). */
   founding: { seed: number; team: number; league: League; draft: DraftState; byHand: boolean } | null = null;
-  draftFilter: 'all' | 'bats' | 'arms' = 'all';
+  /** The prospect board's sort and filters (draft night and the scouting hub share them). */
+  board: BoardState = newBoardState();
+  /** The scouting hub: the next draft's class, or every amateur. */
+  hubClass: 'next' | 'all' = 'next';
+  /** Draft night's clock: AI picks tick by unless paused. `fresh` marks the newest pick for a moment. */
+  draftLive: { paused: boolean; speed: keyof typeof DRAFT_SPEEDS; fresh: number } = { paused: false, speed: 'normal', fresh: 0 };
+  private draftTimer: ReturnType<typeof setTimeout> | null = null;
   /** The Leaders screen: which view and filters. */
   lead: LeadState = { view: 'leaders', scope: 'all', side: 'bat', when: 'season' };
   /** The winter report: your team or the whole league. */
@@ -245,8 +253,24 @@ export class App {
     else if (this.modal) this.root.querySelector<HTMLElement>('.modal [data-autofocus], .modal button')?.focus({ preventScroll: true });
 
     this.streakFlips();
+    this.draftClock();
     this.updatePark();
     this.updateMusic();
+  }
+
+  /** Draft night: while the AI is on the clock and nothing is paused, make its next pick after a beat. */
+  private draftClock(): void {
+    if (this.draftTimer) return;
+    const v = this.screen === 'draft' ? this.draftSession() : null;
+    if (!v || done(v.draft) || onClock(v.draft) === v.userTeam || this.draftLive.paused || this.modal) return;
+    this.draftTimer = setTimeout(() => {
+      this.draftTimer = null;
+      const w = this.screen === 'draft' ? this.draftSession() : null;
+      if (!w || done(w.draft) || onClock(w.draft) === w.userTeam || this.draftLive.paused || this.modal) return;
+      autoPick(w.league, w.draft);
+      this.draftLive.fresh = w.draft.picks.length;
+      this.render();
+    }, DRAFT_SPEEDS[this.draftLive.speed]);
   }
 
   /** Heat each team row last showed. When a hot team cools or a cold one warms, its row plays the flip once. */
@@ -505,6 +529,7 @@ export class App {
       return;
     }
     if (act === 'load-file') { const f = (el as HTMLInputElement).files?.[0]; (el as HTMLInputElement).value = ''; if (f) void this.loadFile(f); }
+    else if (act === 'board-set') { const f = el.dataset.f as keyof BoardState; (this.board as unknown as Record<string, unknown>)[f] = f === 'pos' ? el.value : Number(el.value); this.render(); }
     else if (act === 'roster-team') { this.rosterTeam = Number(el.value); this.render(); }
     else if (act === 'set-readable') { this.settings.readable = (el as HTMLInputElement).checked; document.documentElement.classList.toggle('readable', this.settings.readable); this.saveSettings(); this.parkKey = ''; this.render(); }
     else if (act === 'set-music') { this.settings.music = (el as HTMLInputElement).checked; this.music.setEnabled(this.settings.music); this.saveSettings(); }
@@ -589,8 +614,7 @@ export class App {
         if (!this.picker) return;
         const { league, draft } = foundingLeague(this.picker.seed);
         this.founding = { seed: this.picker.seed, team: this.picker.team, league, draft, byHand: false };
-        autoPicks(league, draft, this.picker.team);
-        this.screen = 'draft'; this.draftFilter = 'all';
+        this.screen = 'draft'; this.draftLive.paused = false;
         this.render();
         return;
       }
@@ -599,21 +623,52 @@ export class App {
         await this.newGame(this.picker.seed, this.picker.team, this.picker.league);
         return;
       }
-      case 'draft-filter': this.draftFilter = d.f as App['draftFilter']; this.render(); return;
       case 'draft-pick': {
         const v = this.draftSession();
         if (!v || done(v.draft) || onClock(v.draft) !== v.userTeam) return;
         pick(v.league, v.draft, Number(d.id));
         if (this.founding) this.founding.byHand = true;
-        autoPicks(v.league, v.draft, v.userTeam);
-        this.render();
+        this.draftLive.fresh = v.draft.picks.length;
+        this.persist(); this.render();
         return;
       }
-      case 'draft-auto': { const v = this.draftSession(); if (v) autoPicks(v.league, v.draft); this.render(); return; }
+      case 'draft-auto': { // the AI picks for you from here (your board first) and finishes the draft
+        const v = this.draftSession();
+        if (!v) return;
+        if (this.founding && v.league.wishlist.length) this.founding.byHand = true; // your board shaped it: the password can't replay this league
+        autoPicks(v.league, v.draft, 0, { team: v.userTeam, ids: v.league.wishlist });
+        this.persist(); this.render();
+        return;
+      }
+      case 'draft-skip': { const v = this.draftSession(); if (v) autoPicks(v.league, v.draft, v.userTeam); this.render(); return; }
+      case 'draft-pause': this.draftLive.paused = !this.draftLive.paused; this.render(); return;
+      case 'draft-speed': this.draftLive.speed = d.speed as App['draftLive']['speed']; this.render(); return;
+      case 'board-sort': { const b = this.board; if (b.sort === d.k) b.desc = !b.desc; else { b.sort = d.k!; b.desc = !['name', 'pos', 'age'].includes(d.k!); } this.render(); return; }
+      case 'hub-class': this.hubClass = d.c as App['hubClass']; this.render(); return;
+      case 'board-side': this.board.side = d.f as BoardState['side']; this.render(); return;
+      case 'board-starred': this.board.starred = !this.board.starred; this.render(); return;
+      case 'board-reset': this.board = { ...newBoardState(), sort: this.board.sort, desc: this.board.desc }; this.render(); return;
+      case 'wish': {
+        const L = this.founding?.league ?? g?.league;
+        if (!L) return;
+        const id = Number(d.id), at = L.wishlist.indexOf(id);
+        if (at >= 0) L.wishlist.splice(at, 1); else L.wishlist.push(id);
+        this.persist(); this.render();
+        return;
+      }
+      case 'wish-move': {
+        const L = this.founding?.league ?? g?.league;
+        if (!L) return;
+        const id = Number(d.id), at = L.wishlist.indexOf(id), to = at + Number(d.dir);
+        if (at < 0 || to < 0 || to >= L.wishlist.length) return;
+        [L.wishlist[at], L.wishlist[to]] = [L.wishlist[to], L.wishlist[at]];
+        this.persist(); this.render();
+        return;
+      }
       case 'draft-finish': {
         if (this.founding) {
           const f = this.founding;
-          autoPicks(f.league, f.draft);
+          autoPicks(f.league, f.draft, 0, { team: f.team, ids: f.league.wishlist });
           finishFounding(f.league, f.draft);
           this.founding = null;
           await this.newGame(f.seed, f.team, f.league);
@@ -725,8 +780,7 @@ export class App {
         let draft: DraftState | null = null;
         await this.withBusy('The winter: aging, retirements, the amateur pool', 1, false, async () => { await tick(); draft = g.beginWinter().draft; });
         if (draft) { // draft night: the AI picks until you're on the clock
-          autoPicks(g.league, draft, g.userTeam);
-          this.screen = 'draft'; this.draftFilter = 'all';
+          this.screen = 'draft'; this.draftLive.paused = false;
           this.render();
           return;
         }

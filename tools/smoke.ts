@@ -181,7 +181,14 @@ async function main() {
   ok(doc.querySelector('#w-l-HR-t') && doc.querySelector('#w-l-AVG-t'), 'all-time leaders from Year 1, rate leaders qualified');
   await click('[data-act="lead"][data-k="view"][data-v="records"]');
   ok(doc.querySelectorAll('.rec-t .trow').length === 12 + 8, 'records: 12 single-season and 8 career marks for hitters');
-  await click('[data-act="lead"][data-k="view"][data-v="leaders"]'); await click('[data-act="lead"][data-k="when"][data-v="season"]'); await app().act('go', { to: 'home' }); await settle();
+  await click('[data-act="lead"][data-k="view"][data-v="leaders"]'); await click('[data-act="lead"][data-k="when"][data-v="season"]');
+  await click('.nav [data-act="go"][data-to="scouting"]');
+  ok(doc.querySelector('#w-preview-t') && doc.querySelectorAll('.draft-board tr').length > 20 && doc.querySelector('[data-k="t1"]'), 'the scouting hub: the next draft class with 1Y/2Y/4Y trends, and the draft preview');
+  await click('.draft-board [data-act="wish"]');
+  ok(app().game.league.wishlist.length === 1 && doc.querySelectorAll('.wish-list li').length === 1, 'your draft board builds from the hub, and saves with the league');
+  await click('[data-act="hub-class"][data-c="all"]');
+  ok(doc.querySelectorAll('.draft-board tr').length > 100, 'every amateur, 16 to 22');
+  await app().act('go', { to: 'home' }); await settle();
   await click('[data-act="news"]');
   ok(doc.querySelector('[data-to="offseason"]'), 'the headlines screen links back to the winter report');
   // Roster management: tabs, a lineup change, a call-up
@@ -211,12 +218,31 @@ async function main() {
   await click('[data-act="new-league"]');
   await click('[data-act="pick-team"][data-id="4"]');
   await click('[data-act="start-year"]');
-  ok(app().screen === 'draft' && text('.clock').includes('YOU ARE ON THE CLOCK'), 'the founding draft stops when you are on the clock');
-  const firstPick = (q('[data-act="draft-pick"]') as HTMLElement).dataset.id;
-  await click('[data-act="draft-pick"]');
+  ok(app().screen === 'draft' && doc.querySelector('.draft-board th .sort'), 'draft night: the board, with sortable columns');
+  if (!doc.querySelector('[data-act="draft-pick"]')) {
+    await click('[data-act="draft-pause"]');
+    const before = app().founding.draft.picks.length; await sleep(900);
+    ok(app().draftLive.paused && app().founding.draft.picks.length === before, 'PAUSE stops the clock');
+    await click('[data-act="draft-skip"]');
+  }
+  ok(text('.clock').includes('YOU ARE ON THE CLOCK') && doc.querySelector('[data-act="draft-pick"]'), 'SKIP TO MY PICK: you are on the clock');
+  await click('[data-act="board-sort"][data-k="age"]');
+  const ages = [...doc.querySelectorAll('.draft-board tr td:nth-child(3)')].map((e) => Number(e.textContent));
+  ok(ages.length > 10 && ages.every((a, i) => i === 0 || a >= ages[i - 1]), 'sort by age, youngest first');
+  const posSel = q('select[data-act="board-set"][data-f="pos"]') as HTMLSelectElement; posSel.value = 'C'; posSel.dispatchEvent(new w.Event('change', { bubbles: true })); await settle();
+  ok([...doc.querySelectorAll('.draft-board tr td:nth-child(2)')].every((e) => e.textContent === 'C'), 'filter: catchers only');
+  await click('[data-act="board-reset"]');
+  const starId = Number((q('.draft-board [data-act="wish"]') as HTMLElement).dataset.id);
+  await click('.draft-board [data-act="wish"]');
+  ok(app().founding.league.wishlist[0] === starId && doc.querySelector('#w-wish-t') && doc.querySelectorAll('.wish-list li').length === 1, 'a star puts him on your draft board, pinned beside the board');
+  const firstPick = (q('.draft-board tr:not(.wish) [data-act="draft-pick"]') as HTMLElement).dataset.id;
+  await click(`[data-act="draft-pick"][data-id="${firstPick}"]`);
   ok(app().founding.league.teams.find((t: any) => t.id === 4).playerIds.includes(Number(firstPick)), 'your pick joins your 40');
   ok(doc.querySelectorAll('.draft-recent li').length >= 2, 'the latest picks show, with reasons');
+  await click('[data-act="draft-pause"]');
   await click('[data-act="draft-auto"]');
+  const starPick = app().founding.draft.picks.find((x: any) => x.playerId === starId);
+  ok(starPick && (starPick.teamId !== 4 || starPick.reason === 'from your board'), 'AUTO picks for you take your board first');
   await click('[data-act="draft-finish"]');
   ok(app().screen === 'home' && app().game.league.teams.every((t: any) => t.playerIds.length === 40) && app().game.draftedByHand, 'AUTO THE REST, then CONTINUE: a league of full rosters');
   ok(app().password() === '', 'no Year 1 password for a hand-drafted league');

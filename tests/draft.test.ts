@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PARAMS } from '../src/engine/atbat/params';
 import { applyEnvironment, type LeagueEnvironment } from '../src/engine/atbat/environment';
-import { autoPicks, DRAFT, onClock, pick, projection } from '../src/engine/draft';
+import { DRAFT, autoPick, autoPicks, lotteryOdds, nextDraftYear, onClock, pick, projection } from '../src/engine/draft';
 import { foundingLeague, finishFounding, generateLeague } from '../src/engine/generate';
 import { beginWinter, finishWinter, nextSeason } from '../src/engine/offseason';
 import { createSeason, simToEnd, type Season } from '../src/engine/season/season';
@@ -81,4 +81,26 @@ describe('the four-year draft', () => {
     expect(w8.draft).not.toBeNull();
     finishWinter(w8);
   }, 120000);
+});
+
+describe('your draft board and the preview', () => {
+  it('AUTO picks for you take the top name left on your board; other teams ignore it', () => {
+    const { league: L, draft: d } = foundingLeague(31);
+    const me = onClock(d);
+    const want = d.pool[d.pool.length - 1]; // someone the AI would never take first
+    L.wishlist = [want];
+    const first = autoPick(L, d, { team: me, ids: L.wishlist });
+    expect(first.playerId).toBe(want);
+    expect(first.reason).toBe('from your board');
+    const next = autoPick(L, d, { team: me, ids: L.wishlist }); // someone else's turn: their own choice
+    expect(next.teamId).not.toBe(me);
+  });
+  it('lottery odds: six top-6 picks shared out, the worst team most likely', () => {
+    const o = lotteryOdds();
+    expect(o.reduce((a, b) => a + b, 0)).toBeCloseTo(6, 6);
+    for (let i = 1; i < o.length; i++) expect(o[i]).toBeLessThanOrEqual(o[i - 1] + 1e-9);
+  });
+  it('the next draft year', () => {
+    expect([1, 3, 4, 5, 8].map(nextDraftYear)).toEqual([4, 4, 4, 8, 8]);
+  });
 });

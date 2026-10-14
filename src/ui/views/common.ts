@@ -72,7 +72,7 @@ export function banner(top: string, sub: string, compact = false): string {
 }
 
 const NAV: Array<[IconName, string, string]> = [
-  ['temple', 'Home', 'home'], ['pennant', 'Standings', 'standings'], ['ball', 'Games', 'games'], ['crown', 'Leaders', 'leaders'], ['flag', 'Races', 'races'],
+  ['temple', 'Home', 'home'], ['pennant', 'Standings', 'standings'], ['ball', 'Games', 'games'], ['crown', 'Leaders', 'leaders'], ['flag', 'Races', 'races'], ['scope', 'Scouting', 'scouting'],
   ['jersey', 'Roster', 'roster'], ['scroll', 'Game log', 'gamelog'],
 ];
 

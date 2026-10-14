@@ -156,10 +156,20 @@ export function pick(L: League, d: DraftState, playerId: number, reason = 'your 
   return rec;
 }
 
+/** One AI pick for whoever is on the clock. Your team (when `board` is yours) takes the top name left on your board first. */
+export function autoPick(L: League, d: DraftState, board?: { team: number; ids: number[] }): DraftPick {
+  if (board && onClock(d) === board.team) {
+    const want = board.ids.find((id) => d.pool.includes(id));
+    if (want !== undefined) return pick(L, d, want, 'from your board');
+  }
+  const c = aiChoice(L, d);
+  return pick(L, d, c.id, c.reason);
+}
+
 /** AI picks until it's `stopFor`'s turn (0: never stop) or the draft is over. */
-export function autoPicks(L: League, d: DraftState, stopFor = 0): DraftPick[] {
+export function autoPicks(L: League, d: DraftState, stopFor = 0, board?: { team: number; ids: number[] }): DraftPick[] {
   const out: DraftPick[] = [];
-  while (!done(d) && onClock(d) !== stopFor) { const c = aiChoice(L, d); out.push(pick(L, d, c.id, c.reason)); }
+  while (!done(d) && onClock(d) !== stopFor) out.push(autoPick(L, d, board));
   return out;
 }
 
@@ -171,12 +181,37 @@ export function foundingDraft(L: League, rng: Rng): DraftState {
 }
 
 /** The four-year draft after `year`: the board is every amateur 18–22; the order comes from the cycle's records and the lottery. */
-export function cycleDraft(L: League, year: number, rng: Rng): DraftState {
+/** The next four-year draft at or after a year (it follows that year's season). */
+export const nextDraftYear = (year: number) => Math.ceil(year / DRAFT.cycle) * DRAFT.cycle;
+
+export interface CycleRecord { teamId: number; W: number; L: number; diff: number }
+/**
+ * Teams worst to best by the cycle's combined record: the completed seasons of the cycle ending with `year`, plus
+ * `extra` records still being played (this season's standings, for the draft preview).
+ */
+export function cycleOrder(L: League, year: number, extra: CycleRecord[] = []): CycleRecord[] {
   const years = L.history.filter((y) => y.year > year - DRAFT.cycle && y.year <= year);
-  const rec = new Map<number, { W: number; L: number; diff: number }>();
-  for (const y of years) for (const t of y.teams) { const r = rec.get(t.teamId) ?? { W: 0, L: 0, diff: 0 }; r.W += t.W; r.L += t.L; r.diff += t.RS - t.RA; rec.set(t.teamId, r); }
-  const pct = (id: number) => { const r = rec.get(id); return r ? r.W / Math.max(1, r.W + r.L) : 0.5; };
-  const worst = L.teams.map((t) => t.id).sort((a, b) => pct(a) - pct(b) || (rec.get(a)?.diff ?? 0) - (rec.get(b)?.diff ?? 0) || a - b);
+  const rec = new Map<number, CycleRecord>(L.teams.map((t) => [t.id, { teamId: t.id, W: 0, L: 0, diff: 0 }]));
+  for (const y of years) for (const t of y.teams) { const r = rec.get(t.teamId)!; r.W += t.W; r.L += t.L; r.diff += t.RS - t.RA; }
+  for (const e of extra) { const r = rec.get(e.teamId)!; r.W += e.W; r.L += e.L; r.diff += e.diff; }
+  const pct = (r: CycleRecord) => (r.W + r.L ? r.W / (r.W + r.L) : 0.5);
+  return [...rec.values()].sort((a, b) => pct(a) - pct(b) || a.diff - b.diff || a.teamId - b.teamId);
+}
+
+/** Chance of each lottery team landing a top-6 pick, by its place among the ten worst (exact, from the weights). */
+export function lotteryOdds(): number[] {
+  const w = DRAFT.lotteryWeights, n = w.length, odds = new Array(n).fill(0);
+  const go = (taken: number[], p: number) => {
+    if (taken.length === DRAFT.lotteryPicks) { for (const i of taken) odds[i] += p; return; }
+    const left = w.reduce((a, b, i) => a + (taken.includes(i) ? 0 : b), 0);
+    for (let i = 0; i < n; i++) if (!taken.includes(i)) go([...taken, i], (p * w[i]) / left);
+  };
+  go([], 1);
+  return odds;
+}
+
+export function cycleDraft(L: League, year: number, rng: Rng): DraftState {
+  const worst = cycleOrder(L, year).map((r) => r.teamId);
   const pool = worst.slice(0, DRAFT.lotteryTeams), weights = DRAFT.lotteryWeights.slice(0, pool.length);
   const winners: number[] = [];
   for (let k = 0; k < DRAFT.lotteryPicks; k++) {

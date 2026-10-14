@@ -41,7 +41,7 @@ ${win({ id: 'w-off-up', title: 'Risers', label: 'BIGGEST GAINS', body: list(r.ri
 ${win({ id: 'w-off-down', title: 'Fallers', label: 'BIGGEST DROPS', body: list(r.fallers.map((m) => row(m, String(m.change))), '—') })}
 ${r.draft?.length ? win({ id: 'w-off-draft', title: `Year ${r.year} Draft`, label: 'THE TOP 10', body: list(r.draft.slice(0, 10).map((x) => `<li class="${x.teamId === g.userTeam ? 'mine' : ''}"><span class="nm">${x.overall}. ${link(x.name, 'player', { id: x.playerId })} <span class="muted">${tname(x.teamId)} · ${esc(x.reason)}</span></span><span class="val">${x.lo}–${x.hi}</span></li>`), '—') }) : ''}
 ${r.promotions?.length ? win({ id: 'w-off-prom', title: 'Promoted', label: `${r.promotions.length} PROSPECTS JOIN A 40`, body: list(top(r.promotions).map((m) => row(m)), '—') }) : ''}
-${win({ id: 'w-off-class', title: 'New Class', label: 'AMATEURS', body: `<p class="note">${r.newClass} sixteen-year-olds joined the amateur pool. Every fourth winter the draft takes those aged 18–22; anyone undrafted at 23 can be signed by anyone.</p>` })}
+${win({ id: 'w-off-class', title: 'New Class', label: 'AMATEURS', body: `<p class="note">${r.newClass} sixteen-year-olds joined the amateur pool. Every fourth winter the draft takes those aged 18–22; anyone undrafted at 23 can be signed by anyone.</p><div class="row-actions">${btn('SCOUTING HUB', 'go', { icon: 'scope', data: { to: 'scouting' } })}</div>` })}
 </div>`;
   const d = r.decree ?? decreeFor(g.league, next);
   const scroll = d ? decreeScroll(d, next, lingering(g.league, next)) : '';
