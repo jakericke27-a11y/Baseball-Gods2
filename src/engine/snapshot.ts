@@ -16,7 +16,7 @@ import type { Season, StandingRow } from './season/season';
 import type { TeamPlan } from './season/teams';
 import type { League, TeamStrategy } from './types';
 
-export const SNAPSHOT_VERSION = 3;
+export const SNAPSHOT_VERSION = 4;
 
 type Entries<V> = Array<[number, V]>;
 
@@ -104,6 +104,8 @@ const UPGRADES: Record<number, (s: SeasonSnap) => SeasonSnap> = {
     seedPipeline(L);
     return { ...s, v: 3 };
   },
+  // v3 → v4: history.
+  3: (s) => { const L = s.league as Partial<League> & League; L.history ??= []; return { ...s, v: 4 }; },
 };
 
 export function upgradeSnapshot(s: SeasonSnap): SeasonSnap {

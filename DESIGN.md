@@ -106,6 +106,15 @@ sac flies, steals, wild pitches/passed balls, errors (glove), extra innings, wal
   spread settling from 5.3 to ~4.3 as teams replace Year 1's random scrubs) and the league line (AVG .256–.266,
   ~10 R/G) holding over 20 years.
 
+## History (`engine/history.ts`)
+Each finished season is boiled down to a summary in `league.history`: every player's regular-season and postseason
+lines as compact rows, every team's record, division place and seed, the bracket and champion, and a ratings
+snapshot of everyone in the game that year (rostered, free agents, amateurs) for scouting lookbacks. Only the
+current season keeps games and pitch logs. Retired players stay in `league.retired`, so careers outlive them.
+About 140 KB of JSON (≈50 KB compressed) per season, two thirds of it the ratings snapshot: a century fits.
+Ratings change only over the winter today, so one snapshot per season is exact; add in-season snapshots when
+something changes ratings mid-year.
+
 ## Event log (`src/engine/log.ts`)
 Per game: PA events (inning/half, outs+bases before, batter, pitcher, play, fielder+batted-ball type,
 quality, runs+RBI, every pitch as one byte, runner movements incl. where outs happened), steals,
@@ -179,6 +188,8 @@ New-engine guards: runs vs BaseRuns check, RBI ≤ R, per-team start limits by r
 - 2026-10-14 — Offseason and Year 2 (step 1.3): hidden potential, amateurs at 16 (draftable 18–22 later), undrafted
   23-year-olds fill rosters until the draft, one offseason report with START YEAR N (an offseason calendar is future
   state). The Year 1 password stops being offered from Year 2 on (it can only replay Year 1); files carry later years.
+- 2026-10-14 — History (step 1.4): season summaries, careers on the player card, past seasons on Standings,
+  one ratings snapshot per season. Draft results join the summary with the draft (1.6).
 
 ## Design philosophy (2026-10-03)
 Realistic baseline; the fun is in finding combinations that BREAK it (ratings + abilities + favor +

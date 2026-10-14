@@ -7,7 +7,8 @@ import { LOOP_CUES, STINGERS } from '../audio';
 import { icon } from '../sprites';
 import { avg, era, era2, ip, obp, rate3, slg, whip } from '../stats';
 import { DIVISIONS, LEAGUES, teamColors, teamName } from '../teams';
-import { banner, btn, esc, r5 } from './common';
+import { careerBatting, careerPitching, ratingsIn, total } from '../../engine/history';
+import { banner, btn, esc, r5, thead, trow, ttable } from './common';
 
 export function titleView(app: App): string {
   const s = app.continueInfo();
@@ -92,8 +93,35 @@ function playerCard(app: App, id: number): string {
   const body = `<p class="pc-line">${esc(role)} · bats ${p.bats}, throws ${p.throws} · age ${p.age} · ${esc(teamName(teamId))}</p>
 <p class="pc-line muted">Born in ${esc(region?.name ?? 'parts unknown')}${region ? ` (${esc(region.environment.replace(/_/g, ' '))})` : ''}</p>
 <div class="rgrid">${isP ? arm + field + clutch : hit + field + clutch}</div>
-<h3 class="pc-h">YEAR ${g.year}</h3><p class="pc-line">${line}</p>${postLine(g, id, isP)}<p class="pc-line muted small">Ratings show to the nearest 5 on the 20–80 scouting scale.</p>`;
+<h3 class="pc-h">YEAR ${g.year}</h3><p class="pc-line">${line}</p>${postLine(g, id, isP)}${careerHtml(g, id, isP)}<p class="pc-line muted small">Ratings show to the nearest 5 on the 20–80 scouting scale.</p>`;
   return modal('pc-t', esc(p.name), body);
+}
+
+/** Year-by-year lines from history, this year's so far, and career totals. */
+function careerHtml(g: NonNullable<App['game']>, id: number, isP: boolean): string {
+  if (!g.league.history.length) return '';
+  const ageIn = (year: number) => ratingsIn(g.league, id, year)?.age;
+  const now = g.players.get(id)!;
+  if (isP) {
+    const past = careerPitching(g.league, id);
+    const cur = g.season.pitching.get(id);
+    const all = [...past, ...(cur ? [{ year: g.year, teamId: g.teamOf.get(id) ?? 0, line: cur }] : [])];
+    if (!all.length) return '';
+    const cells = (q: NonNullable<typeof cur>) => [`${q.W}-${q.L}`, era2(era(q)), String(q.G), String(q.GS), ip(q.outs), String(q.K), String(q.SV)];
+    const rows = all.map((y) => trow([String(y.year), String(y.teamId).padStart(2, '0'), String(y.year === g.year ? now.age : ageIn(y.year) ?? ''), ...cells(y.line)])).join('');
+    const tot = total(all.map((y) => y.line))!;
+    const body = thead(['YR', 'TM', 'AGE', 'W-L', 'ERA', 'G', 'GS', 'IP', 'SO', 'SV']) + rows + trow(['ALL', '', '', ...cells(tot)], 0, true);
+    return `<h3 class="pc-h">CAREER</h3><div class="hscroll">${ttable('48px 34px 34px 50px minmax(50px, 1fr) 34px 34px 56px 40px 34px', 'Career pitching', body)}</div>`;
+  }
+  const past = careerBatting(g.league, id);
+  const cur = g.season.batting.get(id);
+  const all = [...past, ...(cur ? [{ year: g.year, teamId: g.teamOf.get(id) ?? 0, line: cur }] : [])];
+  if (!all.length) return '';
+  const cells = (b: NonNullable<typeof cur>) => [String(b.PA), rate3(avg(b)), rate3(obp(b)), rate3(slg(b)), String(b.HR), String(b.RBI), String(b.SB)];
+  const rows = all.map((y) => trow([String(y.year), String(y.teamId).padStart(2, '0'), String(y.year === g.year ? now.age : ageIn(y.year) ?? ''), ...cells(y.line)])).join('');
+  const tot = total(all.map((y) => y.line))!;
+  const body = thead(['YR', 'TM', 'AGE', 'PA', 'AVG', 'OBP', 'SLG', 'HR', 'RBI', 'SB']) + rows + trow(['ALL', '', '', ...cells(tot)], 0, true);
+  return `<h3 class="pc-h">CAREER</h3><div class="hscroll">${ttable('48px 34px 34px 48px minmax(50px, 1fr) 50px 50px 34px 40px 34px', 'Career batting', body)}</div>`;
 }
 
 function postLine(g: NonNullable<App['game']>, id: number, isP: boolean): string {

@@ -150,6 +150,14 @@ async function main() {
   ok(app().game.league.teams.every((t: any) => t.playerIds.length === 40), 'every team has a full 40-man roster');
   await click('[data-act="news"]');
   ok(doc.querySelector('[data-to="offseason"]'), 'the headlines screen links back to the winter report');
+  // History: a veteran's card shows his Year 1 line, this year's, and a career total; Standings list past seasons.
+  const vet = app().game.league.players.find((p: any) => p.position !== 'P' && app().game.league.history[0].batting.some((r: number[]) => r[0] === p.id) && app().game.season.batting.get(p.id))!;
+  await app().act('player', { id: String(vet.id) }); await settle();
+  const career = [...doc.querySelectorAll('.modal [aria-label="Career batting"] .trow')].map((r) => r.textContent);
+  ok(career.length === 3 && career[0]!.startsWith('1') && career[2]!.startsWith('ALL'), `a veteran's card shows his career: ${career.length} rows`);
+  await click('[data-act="close"]');
+  await click('.nav [data-act="go"][data-to="standings"]');
+  ok(doc.querySelectorAll('.past-list li').length === 1, 'standings list the past season and its champion');
 
   if (errors.length) { console.log('\nErrors:\n' + errors.join('\n')); process.exit(1); }
   console.log('\nSmoke test passed.');

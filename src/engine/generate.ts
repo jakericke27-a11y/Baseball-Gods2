@@ -126,7 +126,7 @@ export function generateLeague(seed: number): League {
     }
     teams.push(team);
   }
-  const league: League = { seed, players, teams, amateurs: [], freeAgents: [], retired: [], nextId };
+  const league: League = { seed, players, teams, amateurs: [], freeAgents: [], retired: [], nextId, history: [] };
   seedPipeline(league);
   return league;
 }

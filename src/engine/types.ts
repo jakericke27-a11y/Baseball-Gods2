@@ -1,3 +1,5 @@
+import type { YearSummary } from './history';
+
 /** All ratings are on the 20–80 scouting scale; 50 is league average. */
 export interface Ratings {
   // hitting
@@ -82,4 +84,6 @@ export interface League {
   retired: RetiredPlayer[];
   /** Next unused player id. */
   nextId: number;
+  /** One summary per finished season (history.ts). */
+  history: YearSummary[];
 }

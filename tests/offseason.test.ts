@@ -92,3 +92,35 @@ describe('offseason and Year 2', () => {
     expect(back.league.players.every((p) => p.dev)).toBe(true);
   });
 });
+
+describe('history', () => {
+  let s: Season = createSeason(generateLeague(44), P, { year: 1, seed: 44, postseason: true });
+  const finals: Season[] = [];
+  for (let y = 1; y <= 3; y++) { simToEnd(s); finals.push(s); s = nextSeason(s).season; }
+  const H = s.league.history;
+  it('one summary per finished season, with the champion and every team', () => {
+    expect(H.map((y) => y.year)).toEqual([1, 2, 3]);
+    H.forEach((y, i) => { expect(y.champion).toBe(finals[i].post!.champion); expect(y.teams.length).toBe(30); expect(y.series.length).toBe(9); });
+  });
+  it('season lines match the seasons they came from', () => {
+    for (const [i, y] of H.entries()) {
+      const sum = (rows: number[][], col: number) => rows.reduce((n, r) => n + r[col], 0);
+      expect(sum(y.batting, 2 + 6)).toBe([...finals[i].batting.values()].reduce((n, b) => n + b.HR, 0));
+      expect(sum(y.pitching, 2 + 8)).toBe([...finals[i].pitching.values()].reduce((n, p) => n + p.K, 0));
+    }
+  });
+  it('careers read back across years, and past ratings can be looked up', async () => {
+    const { careerBatting, ratingsIn, total } = await import('../src/engine/history');
+    const vet = s.league.players.find((p) => p.position !== 'P' && careerBatting(s.league, p.id).length === 3)!;
+    const years = careerBatting(s.league, vet.id);
+    expect(years.map((y) => y.year)).toEqual([1, 2, 3]);
+    expect(total(years.map((y) => y.line))!.PA).toBe(years.reduce((n, y) => n + y.line.PA, 0));
+    const then = ratingsIn(s.league, vet.id, 1)!;
+    expect(then.age).toBe(vet.age - 3);
+    expect(then.ratings.power).toBeGreaterThanOrEqual(20);
+  });
+  it('a season of history is small: under 250 KB as JSON', () => {
+    const bytes = JSON.stringify(H[2]).length;
+    expect(bytes).toBeLessThan(250_000);
+  });
+});

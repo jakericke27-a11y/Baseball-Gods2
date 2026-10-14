@@ -431,3 +431,8 @@ input[type="file"] { font: var(--d-s)/1.2 var(--f-data); }
 .off-list .val { min-width: 4ch; text-align: right; }
 .off-list .nm .muted { display: block; font-size: var(--l-xs); }
 .news-actions { margin: 0 0 16px; }
+.w-past.wide { margin-top: 28px; }
+.past-list li { grid-template-columns: 2.4em minmax(0, 1fr) auto; font: var(--d-s)/1.3 var(--f-data); }
+.past-list .val { color: var(--muted); }
+@media (max-width: 640px) { .past-list li { grid-template-columns: 2.4em minmax(0, 1fr); } .past-list .val { grid-column: 2; } }
+.past-list .val { font-size: var(--d-s); }

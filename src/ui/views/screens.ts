@@ -47,7 +47,7 @@ ${divs}${win({ id: `w-wc-${race.league}`, title: 'Wild Card', label: LEAGUES[rac
   }).join('');
   const P = g.season.post;
   const bracket = P?.seeds.length ? win({ id: 'w-bracket', title: 'Postseason', label: P.champion ? `${FINAL_NAME.toUpperCase()} CHAMPIONS: ${teamName(P.champion).toUpperCase()}` : 'THE BRACKET', body: bracketHtml(g, esc, link), cls: 'w-bracket wide' }) : '';
-  return page(app, 'standings', `${bracket}<div class="two-col">${cols3}</div>`);
+  return page(app, 'standings', `${bracket}<div class="two-col">${cols3}</div>${pastSeasons(g)}`);
 }
 
 // ------------------------------------------------------------------ games and box scores
@@ -80,6 +80,26 @@ ${[0, 1].map((side) => `<tr${r.teamIds[side] === g.userTeam ? ' class="mine"' : 
   };
   const acts = `<div class="row-actions">${btn('GAME LOG', 'go', { icon: 'scroll', data: { to: 'gamelog', index } })}${btn('REPLAY', 'replay', { icon: 'play', data: { index }, title: 'Watch this game pitch by pitch' })}</div>`;
   return `${ls}${acts}<div class="box-grid">${bat(0)}${bat(1)}</div><div class="box-grid">${pit(0)}${pit(1)}</div>`;
+}
+
+/** Every finished year: the champion, the final they beat, and how your team did. */
+function pastSeasons(g: Game): string {
+  const H = g.league.history;
+  if (!H.length) return '';
+  const finish = (y: (typeof H)[number], id: number) => {
+    const t = y.teams.find((x) => x.teamId === id)!;
+    const out = [...y.series].reverse().find((s) => s.high === id || s.low === id);
+    const how = y.champion === id ? 'Won it all' : out ? `Lost ${out.round === 'WS' ? 'the final' : out.round === 'LCS' ? 'the CS' : out.round === 'DS' ? 'the DS' : 'the wild card'}` : ['1st', '2nd', '3rd', '4th', '5th'][t.place - 1] + ' in division';
+    return { rec: `${t.W}-${t.L}`, how };
+  };
+  const rows = [...H].reverse().map((y) => {
+    const ws = y.series.find((s) => s.round === 'WS');
+    const loser = ws ? (ws.winner === ws.high ? ws.low : ws.high) : 0;
+    const mine = finish(y, g.userTeam);
+    const champ = y.champion ? `${link(teamName(y.champion), 'team', { id: y.champion })}${loser ? ` <span class="muted">over ${esc(teamName(loser))}${ws ? ` ${Math.max(...ws.wins)}-${Math.min(...ws.wins)}` : ''}</span>` : ''}` : '—';
+    return `<li class="${y.champion === g.userTeam ? 'mine' : ''}"><span class="rank">${y.year}</span><span class="nm">${champ}</span><span class="val">You: ${mine.rec}, ${esc(mine.how.toLowerCase())}</span></li>`;
+  }).join('');
+  return win({ id: 'w-past', title: 'Past Seasons', label: `${H.length} ${H.length === 1 ? 'YEAR' : 'YEARS'} · ${FINAL_NAME.toUpperCase()} CHAMPIONS`, body: `<ol class="lead-list past-list">${rows}</ol>`, cls: 'w-past wide' });
 }
 
 /** "AL DS G3 · " for postseason games, "GAME 163 · " for tiebreakers. */
