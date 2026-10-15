@@ -7,6 +7,7 @@ import type { App } from '../app';
 import { LOOP_CUES, STINGERS } from '../audio';
 import { icon } from '../sprites';
 import { avg, era, era2, ip, obp, rate3, slg, whip } from '../stats';
+import { baseballCard, compareCards } from './card';
 import { DIVISIONS, LEAGUES, teamColors, teamFull, teamName } from '../teams';
 import { careerBatting, careerPitching, ratingsIn, total } from '../../engine/history';
 import { banner, btn, esc, r5, thead, trow, ttable } from './common';
@@ -101,7 +102,8 @@ function playerCard(app: App, id: number): string {
 <p>${esc(role)}</p><p>Bats ${p.bats} · Throws ${p.throws}</p><p class="pc-main">Age ${p.age} · ${esc(where)}</p></div>
 <div class="rgrid">${isP ? arm + field + clutch : hit + field + clutch}</div>
 ${g ? `<h3 class="pc-h">YEAR ${g.year}</h3>${(isP ? q : b) ? `<p class="pc-line st-line">${seasonLine(g, id, isP)}</p><p class="pc-line muted small">Green: the league's top tenth among qualified players. Red: the bottom tenth.</p>` : `<p class="pc-line">${line}</p>`}${postLine(g, id, isP)}${careerHtml(g, id, isP)}` : ''}`;
-  return modal('pc-t', esc(p.name), body);
+  const cardBtn = g?.players.get(id) ? `<div class="row-actions">${btn('BASEBALL CARD', 'card', { data: { id }, title: 'His card: this year, ranks, ratings; flip it for splits' })}</div>` : '';
+  return modal('pc-t', esc(p.name), cardBtn + body);
 }
 
 const POS_NAME: Record<string, string> = { C: 'Catcher', '1B': 'First base', '2B': 'Second base', '3B': 'Third base', SS: 'Shortstop', LF: 'Left field', CF: 'Center field', RF: 'Right field', DH: 'Designated hitter', UT: 'Utility' };
@@ -198,6 +200,8 @@ export function modalView(app: App): string {
   const m = app.modal;
   if (!m) return '';
   if (m.kind === 'player') return playerCard(app, m.id);
+  if (m.kind === 'compare') return app.game ? modal('cmp-t', 'Compare', compareCards(app, m.a, m.b, 'cmp', ['', '']), true) : '';
+  if (m.kind === 'card') return app.game?.players.get(m.id) ? modal('bc-t', 'Baseball Card', `<div class="bc-modal">${baseballCard(app, m.id, 'modal')}</div><div class="row-actions">${btn('PROFILE', 'player', { data: { id: m.id } })}</div>`) : '';
   if (m.kind === 'settings') return settingsModal(app);
   if (m.kind === 'password') return passwordModal(app);
   return restartModal(app);

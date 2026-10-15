@@ -179,11 +179,13 @@ export function rosterView(app: App): string {
   const sel = `<label class="team-select"><span class="k">TEAM</span><select data-act="roster-team" id="roster-team">${g.league.teams.map((t) => `<option value="${t.id}"${t.id === teamId ? ' selected' : ''}>${esc(teamName(t.id))}${t.id === g.userTeam ? ' (you)' : ''}</option>`).join('')}</select></label>`;
   const tabs = [['lineup', 'TEAM'], ...(mine ? [['moves', '26 & RESERVES']] : [])]
     .map(([k, label]) => `<button type="button" class="tab${tab === k ? ' on' : ''}" data-act="roster-tab" data-tab="${k}" data-key="roster-tab:${k}" aria-pressed="${tab === k}">${label}</button>`).join('')
-    + (tab !== 'moves' ? `<span class="tab-gap"></span>${(['ratings', 'stats'] as const).map((k) => `<button type="button" class="tab${app.rosterCols === k ? ' on' : ''}" data-act="roster-cols" data-c="${k}" data-key="roster-cols:${k}" aria-pressed="${app.rosterCols === k}">${k.toUpperCase()}</button>`).join('')}` : '');
+    + (tab !== 'moves' ? `<span class="tab-gap"></span><button type="button" class="tab${app.cmp.on ? ' on' : ''}" data-act="cmp-toggle" data-key="cmp-toggle" aria-pressed="${app.cmp.on}" title="Pick two players to see their Baseball Cards side by side">${app.cmp.on ? (app.cmp.a ? 'PICK ONE MORE' : 'PICK TWO') : 'COMPARE'}</button><span class="tab-gap"></span>${(['ratings', 'stats'] as const).map((k) => `<button type="button" class="tab${app.rosterCols === k ? ' on' : ''}" data-act="roster-cols" data-c="${k}" data-key="roster-cols:${k}" aria-pressed="${app.rosterCols === k}">${k.toUpperCase()}</button>`).join('')}` : '');
   const autoBtn = (part: 'lineup' | 'staff' | 'roster') => mine
     ? `<button type="button" class="btn btn-ghost auto-btn${auto[part] ? ' on' : ''}" data-act="roster-auto" data-part="${part}" data-key="roster-auto:${part}" aria-pressed="${auto[part]}" title="${auto[part] ? 'The AI runs this. Change anything to take over.' : 'You run this. Turn AUTO on to hand it back to the AI.'}"><span>AUTO ${auto[part] ? 'ON' : 'OFF'}</span></button>` : '';
   const tbl = (head: string, rows: string, label: string) => `<div class="hscroll"><table class="stat roster" aria-label="${label}">${head}${rows}</table></div>`;
-  const name = (p: (typeof players)[0]) => `<th scope="row">${link(p.name, 'player', { id: p.id })}</th>`;
+  const name = (p: (typeof players)[0]) => app.cmp.on && tab !== 'moves'
+    ? `<th scope="row"><button type="button" class="link cmp-name${app.cmp.a === p.id ? ' picked' : ''}" data-act="cmp-pick" data-id="${p.id}" data-key="cmp:${p.id}" title="Compare">${esc(p.name)}</button></th>`
+    : `<th scope="row">${link(p.name, 'player', { id: p.id })}</th>`;
   const updown = (act: string, i: number, n: number, on: boolean) => mine
     ? `<td class="ud">${on ? `${btn('', act, { icon: 'left', data: { i, dir: -1 }, disabled: i === 0, title: 'Move up', cls: 'btn-icon btn-ghost up' })}${btn('', act, { icon: 'right', data: { i, dir: 1 }, disabled: i === n - 1, title: 'Move down', cls: 'btn-icon btn-ghost down' })}` : ''}</td>` : '';
   let body = '';

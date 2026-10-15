@@ -51,7 +51,20 @@ export type GameMove =
   | { kind: 'pitcher'; side: number; id: number }      // bring in a reliever from the bullpen
   | { kind: 'keep'; side: number }                     // leave the pitcher in (overrides the AI this time)
   | { kind: 'sub'; side: number; slot: number; id: number; why: 'hitter' | 'field' } // replace a lineup slot (same position)
-  | { kind: 'runner'; side: number; base: number; id: number }; // pinch-run for the runner on base 0–2
+  | { kind: 'runner'; side: number; base: number; id: number } // pinch-run for the runner on base 0–2
+  | { kind: 'call'; side: number; bat?: BatCall | null; pitch?: PitchCall | null } // this plate appearance only
+  | { kind: 'align'; side: number; infield?: InfieldAlign; outfield?: OutfieldAlign }; // stays until changed
+
+/**
+ * Manager calls for one plate appearance. Batting: Tie the Game Now! (power), Move the Runner! (move),
+ * Draw the Walk! (walk), Hit and Run! (hitrun). Pitching: go for the strikeout (k), a grounder (gb), a fly ball (fb),
+ * Dot the Corners (corners), the intentional walk (ibb). Shifts are banned, so alignments are depths only.
+ */
+export type BatCall = 'power' | 'move' | 'walk' | 'hitrun';
+export type PitchCall = 'k' | 'gb' | 'fb' | 'corners' | 'ibb';
+export type InfieldAlign = 'normal' | 'in' | 'dp' | 'lines';
+export type OutfieldAlign = 'normal' | 'deep' | 'shallow';
+export interface Alignment { infield: InfieldAlign; outfield: OutfieldAlign }
 
 /** A substitution, for the box score and the log. */
 export interface Sub { side: number; slot: number; incoming: number; outgoing: number; why: 'hitter' | 'runner' | 'field'; inning: number }
@@ -75,6 +88,10 @@ export interface GameCall {
   /** The event log so far, for the watch screen. */
   log: Uint8Array | null;
   pitchersUsed: [number[], number[]];
+  /** Calls set for the coming plate appearance ([away, home]; the batting side's bat call, the fielding side's pitch call). */
+  calls: { bat: [BatCall | null, BatCall | null]; pitch: [PitchCall | null, PitchCall | null] };
+  /** Each side's defensive alignment. */
+  align: [Alignment, Alignment];
 }
 
 export interface BatLine {

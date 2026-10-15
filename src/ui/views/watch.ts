@@ -9,6 +9,7 @@ import { era, era2, rate3 } from '../stats';
 import { findSeries, seriesShort } from '../post';
 import { teamName } from '../teams';
 import { banner, btn, esc, iconBtn, link, r5, win, tname } from './common';
+import { BAT_CALLS, PITCH_CALLS, manageView, pitchCallName } from './manage';
 
 function lineScore(app: App, f: Frame): string {
   const r = app.watch!.replay.result;
@@ -91,9 +92,6 @@ function managerPanel(app: App): string {
   const used = new Set(c.used[me]);
   const bench = (setup.bench ?? []).filter((p) => !used.has(p.id));
   const pen = setup.bullpen.filter((a) => !used.has(a.player.id));
-  const opt = (id: number, text: string) => `<option value="${id}">${esc(text)}</option>`;
-  const penSel = `<select id="live-pitch-sel" aria-label="Reliever">${pen.map((a) => opt(a.player.id, `${a.role} ${a.player.name} · STA ${r5(a.player.ratings.stamina)}`)).join('')}</select>`;
-  const benchSel = (id: string) => `<select id="${id}" aria-label="Bench player">${bench.map((p) => opt(p.id, `${p.position} ${p.name} · CON ${r5(p.ratings.contact)} POW ${r5(p.ratings.power)} SPD ${r5(p.ratings.speed)}`)).join('')}</select>`;
   const mine = c.pitchers[me];
   let ask = '';
   if (app.liveBlocked()) {
@@ -103,16 +101,14 @@ function managerPanel(app: App): string {
   } else if (w.alert) {
     ask = `<div class="mgr-ask alert" role="status"><p>${esc(w.alert)}</p><div class="row-actions">${btn('PLAY ON', 'live-go', { kind: 'primary', icon: 'play' })}</div></div>`;
   }
-  const moves: string[] = [];
-  if (fielding) {
-    moves.push(`<div class="mgr-row"><span class="k">PITCHING · ${esc(g.name(mine.id))}, ${mine.pitches} PITCHES</span>${pen.length ? `<div class="mgr-ctl">${penSel}${btn('BRING IN', 'live-pitch')}</div>` : '<p class="note small muted">Nobody left in the bullpen.</p>'}</div>`);
-    if (bench.length) moves.push(`<div class="mgr-row"><span class="k">DEFENSIVE SUB</span><div class="mgr-ctl"><select id="live-def-slot" aria-label="Replace">${c.lineups[me].map(([id, pos], i) => pos >= 2 ? `<option value="${i}">${POS_ABBR[pos]} ${esc(g.name(id))}</option>` : '').join('')}</select>${benchSel('live-def-sel')}${btn('SWAP IN', 'live-def')}</div></div>`);
-  } else {
-    if (bench.length) moves.push(`<div class="mgr-row"><span class="k">PINCH HIT FOR ${esc(g.name(c.batter)).toUpperCase()}</span><div class="mgr-ctl">${benchSel('live-ph-sel')}${btn('PINCH HIT', 'live-ph')}</div></div>`);
-    const on = c.bases.map((id, b) => (id ? `<option value="${b}">${['1ST', '2ND', '3RD'][b]} ${esc(g.name(id))}</option>` : '')).join('');
-    if (bench.length && on) moves.push(`<div class="mgr-row"><span class="k">PINCH RUN</span><div class="mgr-ctl"><select id="live-pr-base" aria-label="Runner">${on}</select>${benchSel('live-pr-sel')}${btn('PINCH RUN', 'live-pr')}</div></div>`);
-    if (!bench.length) moves.push('<p class="note small muted">Nobody left on the bench.</p>');
-  }
+  // What's set for this plate appearance, and the one button into MANAGE.
+  const bat = c.calls.bat[me], pitch = c.calls.pitch[me], al = c.align[me];
+  const set = fielding
+    ? [pitch ? `${PITCH_CALLS.find(([k]) => k === pitch)![1]} (${pitchCallName(g.players.get(mine.id)!, pitch)})` : '', al.infield !== 'normal' ? `INFIELD ${al.infield.toUpperCase()}` : '', al.outfield !== 'normal' ? `OUTFIELD ${al.outfield.toUpperCase()}` : ''].filter(Boolean)
+    : [bat ? BAT_CALLS.find(([k]) => k === bat)![1] : ''].filter(Boolean);
+  const status = fielding ? `${esc(g.name(mine.id))} · ${mine.pitches} PITCHES · ${pen.length} IN THE PEN` : `${esc(g.name(c.batter))} UP · ${bench.length} ON THE BENCH`;
+  const moves = [`<div class="mgr-row"><span class="k">${status}</span><p class="note small${set.length ? '' : ' muted'}">${set.length ? `Set: ${esc(set.join(' · '))}` : 'No calls: the bench coach plays it straight.'}</p></div>`,
+    `<div class="row-actions">${btn('MANAGE', 'mg-show', { kind: 'primary', title: 'Subs, calls and the defense, on the field with Baseball Cards' })}</div>`];
   return win({ id: 'w-mgr', title: fielding ? 'Manager · In the Field' : 'Manager · At Bat', label: modeSel, cls: 'w-mgr', body: `${ask}${moves.join('')}`, scroll: true });
 }
 
@@ -120,17 +116,34 @@ function callBox(f: Frame): string {
   return `<div class="call tone-${f.tone}" role="status" aria-live="polite">${esc(f.call)}</div>`;
 }
 
+/** One at-bat from the log, pitch by pitch (the catcher's-view picture comes with pitch locations in 3.2). */
+function abDetail(g: App['game'] & object, ab: NonNullable<import('../replay').LogLine['ab']>): string {
+  let b = 0, s = 0;
+  const rows = ab.pitches.map((byte, i) => {
+    const res = pitchResultOf(byte), count = `${b}-${s}`;
+    if (res === 0) b++; else if (res === 1 || res === 2) s++; else if (res === 3 && s < 2) s++;
+    return `<li><span class="n">${i + 1}</span><span class="what">${PITCH_WORD[res]}</span><span class="where">${LOC_WORD[pitchLocOf(byte)]}</span><span class="cnt">${count}</span></li>`;
+  }).join('');
+  return `<div class="ab-detail"><p class="small muted">${esc(g.name(ab.batter))} vs ${esc(g.name(ab.pitcher))} · ${ab.pitches.length} pitch${ab.pitches.length === 1 ? '' : 'es'}</p><ol class="ab-pitches">${rows}</ol></div>`;
+}
+
 function gameLog(app: App, f: Frame): string {
   const rp = app.watch!.replay, g = app.game!;
   const lines = rp.log.slice(0, f.log);
   let html = '', key = -1;
-  for (const l of lines) {
+  lines.forEach((l, i) => {
     if (l.key !== key) {
       key = l.key;
       html += `<div class="log-half">${halfLabel(l.inning, l.half).toUpperCase()} — ${esc(teamName(rp.result.teamIds[l.half])).toUpperCase()}</div>`;
     }
-    html += `<p class="log-line ${l.tone ?? ''}${l.runs ? ' scored' : ''}${l.kind === 'change' ? ' change' : ''}">${esc(l.text)}${l.runs ? ` <span class="log-score">${l.score[0]}-${l.score[1]}</span>` : ''}</p>`;
-  }
+    const cls = `log-line ${l.tone ?? ''}${l.runs ? ' scored' : ''}${l.kind === 'change' ? ' change' : ''}`;
+    const text = `${esc(l.text)}${l.runs ? ` <span class="log-score">${l.score[0]}-${l.score[1]}</span>` : ''}`;
+    if (l.ab) {
+      const open = app.logAb === i;
+      html += `<button type="button" class="${cls} log-ab${open ? ' open' : ''}" data-act="log-ab" data-i="${i}" data-key="log-ab:${i}" aria-expanded="${open}" title="The at-bat, pitch by pitch">${text}</button>`;
+      if (open) html += abDetail(g, l.ab);
+    } else html += `<p class="${cls}">${text}</p>`;
+  });
   if (f.kind === 'up' || f.kind === 'pitch') {
     const fk = f.inning * 2 + f.half;
     if (fk !== key) html += `<div class="log-half">${halfLabel(f.inning, f.half).toUpperCase()} — ${esc(teamName(rp.result.teamIds[f.half])).toUpperCase()}</div>`;
@@ -162,6 +175,6 @@ export function watchView(app: App): string {
 <main class="main watch-main" id="main">${lineScore(app, f)}
 <div class="gv"><div class="gv-left">${matchup(app, f)}${thisAtBat(f)}</div>
 <div class="gv-center">${callBox(f)}${countBox(f)}${managerPanel(app)}</div>
-<div class="gv-right">${gameLog(app, f)}</div></div></main>
+<div class="gv-right">${gameLog(app, f)}</div></div></main>${app.manage.open && w.live && app.liveEdge() ? manageView(app) : ''}
 <footer class="footer"><nav class="nav" aria-label="Screens">${iconBtn('temple', final ? 'Home' : w.live ? 'Leave game (the bench coach finishes it)' : 'Leave game (it plays out)', 'go', { data: { to: 'home' } })}${auto}</nav><div class="actions">${controls}</div></footer></div>`;
 }

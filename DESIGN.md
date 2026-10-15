@@ -340,6 +340,28 @@ New-engine guards: runs vs BaseRuns check, RBI ≤ R, per-team start limits by r
   filters so the board lines up with the draft window; the right-hand windows fold (`fold` on `win()`). NOW is OVR
   everywhere. **Live game:** YOU'RE BATTING / YOU'RE PITCHING on the matchup, each side's team on its person, and ▶ on
   the batting team's line.
+- 2026-10-15 — Baseball Cards and MANAGE (step 2.7). **Calls and alignments** (`engine/game/tactics.ts`): a call lasts one
+  plate appearance (`{ kind: 'call' }`: the batting side's TIE THE GAME NOW! / MOVE THE RUNNER! / DRAW THE WALK! /
+  HIT AND RUN!, the fielding side's strikeout / grounder / fly ball / DOT THE CORNERS / intentional walk); an alignment
+  stays until changed (`{ kind: 'align' }`: infield normal / in / double-play depth / guard the lines, outfield normal /
+  deep / shallow; shifts are banned). Each is a bounded log-odds shift in the at-bat (`AtBatContext.tactic`) plus a few
+  runner rules in the game layer (no double play and runners move up on Move the Runner! and Hit and Run!, the runner
+  from first takes third on a Hit and Run single, infield in holds the runner at third, double-play depth turns more).
+  The intentional walk is four balls with no dice. With nothing called every shift is exactly 0, so untouched games are
+  pitch for pitch the same (baseline unchanged). Sizing rule: spammed, a call costs a little (`npm run tactics`: Tie
+  the Game −0.34 runs a game, Move the Runner −0.18, Draw the Walk −0.19, Hit and Run 0.0); used in its moment it can
+  help (grounder with a runner on −0.14 allowed, double-play depth −0.19). The AI makes no calls yet (a later tuning
+  pass). Pitching calls are named per pitcher from his best tool until pitch types exist (3.2). **Baseball Card**
+  (`views/card.ts`): art slots `card_front` / `card_back` (100x140, shown at 2x; a team-colored canvas until art is
+  published), a seeded pixel portrait, the name in the lower third, the slash line (hitters) or W-L / ERA / SO
+  (pitchers), league ranks in the top 50, ratings; FLIP shows season splits read from the pitch logs (`splits.ts`:
+  platoon, home/road, bases, RISP, late & close, outs, months), filterable and sortable. Opened from the player profile,
+  in MANAGE and with COMPARE on the Roster screen. **MANAGE** replaces the live panel's dropdowns: the field (your
+  fielders, or your batter and runners), the DH, the dugout and the bullpen as small cards, each with one OUT slot;
+  drag (or click out, then in) to set up a swap, compare the two cards, CONFIRM or WAIT, NVM. Moving a fielder to
+  another position isn't supported yet (the engine keeps a slot's position). Game-log plays open their at-bat, pitch by
+  pitch (in game only; the catcher's view comes with pitch locations in 3.2). Published art now loads at start
+  (`loadArt`, `artUrl`).
 
 ## Design philosophy (2026-10-03)
 Realistic baseline; the fun is in finding combinations that BREAK it (ratings + abilities + favor +

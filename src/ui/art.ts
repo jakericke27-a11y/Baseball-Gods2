@@ -167,5 +167,11 @@ export const KIT_FILE = 'baseball-gods-art-kit.zip';
 /** Hand the kit to the viewer. */
 export const saveKit = (kit: Kit) => offerFile(KIT_FILE, kit.bytes, 'application/zip');
 
+/** Published art, read once at start (see loadArt); empty until then or when there's none. */
+let published = new Set<string>();
+export async function loadArt(): Promise<boolean> { try { published = await publishedArt(); } catch { /* none */ } return published.size > 0; }
+/** The URL of a slot's published PNG, or '' while it's still a color block. */
+export const artUrl = (id: string): string => (published.has(id) ? `art/${id}.png` : '');
+
 export const artApi = { slot: artSlot, slots: artSlots, get: getArtSlot, guide: artGuide, guides: artGuides, blockHtml, colorBlock, publishedArt, buildKit, saveKit };
 if (typeof window !== 'undefined') (window as unknown as { __bgArt?: typeof artApi }).__bgArt = artApi;

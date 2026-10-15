@@ -25,6 +25,17 @@ export interface AtBatContext {
   clutch?: number;
   /** Fielders by scoring position (1 = P ... 9 = RF). Omitted = league-average defense. */
   defense?: Defense;
+  /** Manager calls and alignments, as log-odds shifts (game layer builds them). Omitted = nobody called anything. */
+  tactic?: Tactic;
+}
+
+/** Bounded shifts from manager calls, in the at-bat's own log-odds units. Every field defaults to 0. */
+export interface Tactic {
+  zone?: number; heart?: number; swingZone?: number; swingChase?: number; contact?: number; quality?: number;
+  /** Batted-ball type, relative to a ground ball. */
+  typeLD?: number; typeFB?: number; typePU?: number;
+  /** Hit chances on ground balls and on balls in the air; extra bases once it's a hit. */
+  hitGB?: number; hitAir?: number; xbh?: number;
 }
 
 export interface Defense {
@@ -72,18 +83,20 @@ export function simulateAtBat(
   const stuff = 0.6 * vel + 0.4 * mov;
   const plat = platoonEdge(batter.bats, pitcher.throws);
   const clutch = ctx.clutch ?? 0;
+  const t = ctx.tactic;
 
-  // Per-PA terms that don't change pitch to pitch.
-  const zoneBase = P.zone + s.zoneControl * ctl;
-  const heartProb = sigmoid(P.heart + s.heartControl * ctl);
-  const swingChaseBase = P.swingChase + s.chaseDiscipline * eye + s.chaseMovement * mov - 0.5 * clutch;
-  const swingEdgeBase = P.swingEdge + s.edgeDiscipline * eye;
-  const contactShift = s.contactContact * con + s.contactStuff * stuff + s.platoon * plat + clutch;
+  // Per-PA terms that don't change pitch to pitch. (Tactic shifts are exactly 0 when nothing was called.)
+  const zoneBase = P.zone + s.zoneControl * ctl + (t?.zone ?? 0);
+  const heartProb = sigmoid(P.heart + s.heartControl * ctl + (t?.heart ?? 0));
+  const swingChaseBase = P.swingChase + s.chaseDiscipline * eye + s.chaseMovement * mov - 0.5 * clutch + (t?.swingChase ?? 0);
+  const swingEdgeBase = P.swingEdge + s.edgeDiscipline * eye + (t?.swingZone ?? 0);
+  const swingHeart = P.swingHeart + (t?.swingZone ?? 0);
+  const contactShift = s.contactContact * con + s.contactStuff * stuff + s.platoon * plat + clutch + (t?.contact ?? 0);
   const foulBase = P.foul + s.foulContact * con;
   const hbpProb = sigmoid(P.hbp + s.hbpControl * ctl);
   const qualityBase =
     s.qualityPower * pow + s.qualityContact * con +
-    s.qualityMovement * mov + s.qualityVelocity * vel + s.platoon * plat + 0.8 * clutch;
+    s.qualityMovement * mov + s.qualityVelocity * vel + s.platoon * plat + 0.8 * clutch + (t?.quality ?? 0);
 
   let balls = 0, strikes = 0, n = 0;
 
@@ -99,7 +112,7 @@ export function simulateAtBat(
     // 2. Swing decision
     const swingL = loc === Loc.Chase
       ? swingChaseBase + P.swingChaseCount[balls][strikes]
-      : (loc === Loc.Heart ? P.swingHeart : swingEdgeBase) + P.swingZoneCount[balls][strikes];
+      : (loc === Loc.Heart ? swingHeart : swingEdgeBase) + P.swingZoneCount[balls][strikes];
 
     if (rng.next() >= sigmoid(swingL)) {
       // Taken pitch
@@ -145,7 +158,7 @@ export function simulateAtBat(
       P.qualityCount[balls][strikes] + (strikes === 2 ? P.qualityTwoStrike : 0) +
       rng.normal();
     const side = batter.bats === 'S' ? (pitcher.throws === 'R' ? 'L' : 'R') : batter.bats;
-    return resolveBattedBall(q, loc, con, pow, mov, spd, side, ctx.defense, P, rng, n);
+    return resolveBattedBall(q, loc, con, pow, mov, spd, side, ctx.defense, P, rng, n, t);
   }
 }
 
@@ -169,14 +182,14 @@ const ERROR_BASE: Record<number, number> = {
 function resolveBattedBall(
   q: number, loc: Loc, con: number, pow: number, mov: number, spd: number,
   side: 'L' | 'R', defense: Defense | undefined,
-  P: AtBatParams, rng: Rng, n: number,
+  P: AtBatParams, rng: Rng, n: number, t: Tactic | undefined,
 ): AtBatResult {
   const s = P.s;
 
   // Launch type: softmax over ground (reference), line, fly, popup.
-  const eLD = Math.exp(P.typeLD + s.typeLDContact * con + P.typeQualityLD * q);
-  const eFB = Math.exp(P.typeFB + s.typeFBPower * pow + s.typeFBMovement * mov + P.typeQualityFB * q);
-  const ePU = Math.exp(P.typePU + s.typePUContact * con + (loc === Loc.Chase ? P.typePUChase : 0) - 0.3 * q);
+  const eLD = Math.exp(P.typeLD + s.typeLDContact * con + P.typeQualityLD * q + (t?.typeLD ?? 0));
+  const eFB = Math.exp(P.typeFB + s.typeFBPower * pow + s.typeFBMovement * mov + P.typeQualityFB * q + (t?.typeFB ?? 0));
+  const ePU = Math.exp(P.typePU + s.typePUContact * con + (loc === Loc.Chase ? P.typePUChase : 0) - 0.3 * q + (t?.typePU ?? 0));
   let u = rng.next() * (1 + eLD + eFB + ePU);
   let bb: BattedBall;
   if (u < 1) bb = BattedBall.Ground;
@@ -211,6 +224,7 @@ function resolveBattedBall(
   else if (bb === BattedBall.Line) hitL = P.hitLD + P.hitSlopeLD * q - 0.12 * range;
   else if (bb === BattedBall.Fly) hitL = P.hitFB + P.hitSlopeFB * q - 0.25 * range - (fielder <= 6 ? 1.5 : 0);
   else hitL = P.hitPU;
+  if (t) hitL += bb === BattedBall.Ground ? (t.hitGB ?? 0) : bb === BattedBall.Popup ? 0 : (t.hitAir ?? 0);
 
   if (rng.next() >= sigmoid(hitL)) {
     if (defense && rng.next() < sigmoid(ERROR_BASE[bb] - 0.40 * hands)) return done(Outcome.ReachedOnError);
@@ -233,7 +247,7 @@ function resolveBattedBall(
   const of = defense?.fielders[fielder];
   const ofRange = of ? z(of.instincts) : 0, ofArm = of ? z(of.cannon) : 0;
   const xbhL = (bb === BattedBall.Ground ? P.xbhGB : bb === BattedBall.Line ? P.xbhLD : P.xbhFB) +
-    P.xbhSlope * q + s.xbhSpeed * spd - 0.15 * ofRange - 0.10 * ofArm;
+    P.xbhSlope * q + s.xbhSpeed * spd - 0.15 * ofRange - 0.10 * ofArm + (t?.xbh ?? 0);
   if (rng.next() >= sigmoid(xbhL)) return done(Outcome.Single, fielder);
   return done(rng.next() < sigmoid(P.triple + s.tripleSpeed * spd) ? Outcome.Triple : Outcome.Double, fielder);
 }

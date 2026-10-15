@@ -66,12 +66,19 @@ async function main() {
     else if (doc.querySelector('[data-act="live-go"]')) await click('[data-act="live-go"]');
   };
   let guard = 0;
-  while (app().watch.live && !doc.querySelector('[data-act="live-ph"]') && guard++ < 400) { await answer(); await click('[data-act="w-pitch"]'); }
-  ok(doc.querySelector('[data-act="live-ph"]'), 'at bat: pinch hitters on offer (used in Year 2: Year 1 stays replayable from its password)');
+  const atBat = () => app().watch.live && app().game.live?.day.call?.half === app().game.liveSide && doc.querySelector('[data-act="mg-show"]');
+  while (app().watch.live && !atBat() && guard++ < 400) { await answer(); await click('[data-act="w-pitch"]'); }
+  ok(atBat(), 'at bat: MANAGE on offer (moves used in Year 2: Year 1 stays replayable from its password)');
+  await click('[data-act="mg-show"]');
+  ok(doc.querySelector('.mg [data-from="batter"]') && doc.querySelector('.mg [data-from="bench"]') && doc.querySelector('[data-act="mg-bat"][data-v="power"]'), 'MANAGE shows your batter on the field, the dugout and the at-bat calls');
+  doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await sleep(5);
+  ok(!doc.querySelector('.mg'), 'Esc closes MANAGE');
   await click('[data-act="w-inning"]');
   doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
   await sleep(5);
   ok(doc.querySelectorAll('.w-log .log-line').length > 3, 'game log fills in');
+  await click('.w-log [data-act="log-ab"]');
+  ok(doc.querySelectorAll('.ab-detail .ab-pitches li').length > 0, 'a play in the log opens its at-bat, pitch by pitch');
   guard = 0;
   while (app().watch.live && guard++ < 200) { await click('[data-act="w-end"]'); await answer(); }
   ok(!app().game.live && text('.call').startsWith('Final'), `to the end, answering when asked: "${text('.call')}"`);
@@ -196,9 +203,18 @@ async function main() {
     else if (doc.querySelector('[data-act="live-go"]')) await click('[data-act="live-go"]');
   };
   let guard2 = 0;
-  while (app().watch.live && !doc.querySelector('[data-act="live-ph"]') && guard2++ < 400) { await answer2(); await click('[data-act="w-pitch"]'); }
-  const ph = Number((q('#live-ph-sel') as HTMLSelectElement).value);
-  await click('[data-act="live-ph"]');
+  const atBat2 = () => app().watch.live && app().game.live?.day.call?.half === app().game.liveSide && doc.querySelector('[data-act="mg-show"]');
+  while (app().watch.live && !atBat2() && guard2++ < 400) { await answer2(); await click('[data-act="w-pitch"]'); }
+  await click('[data-act="mg-show"]');
+  await click('.mg [data-from="batter"]');
+  const benchCard = q('.mg [data-from="bench"]');
+  const ph = Number(benchCard.dataset.pid);
+  await click(`.mg [data-from="bench"][data-pid="${ph}"]`);
+  ok(doc.querySelectorAll('.mg .bc-compare .bcard').length === 2 && text('.mg-what').includes('PINCH HITTER'), 'MANAGE compares the two Baseball Cards before you confirm');
+  await click('[data-act="mg-confirm"]');
+  await click('[data-act="mg-bat"][data-v="power"]');
+  ok(app().game.live.day.call.calls.bat[app().game.liveSide] === 'power', 'an at-bat call is set for this plate appearance');
+  await click('[data-act="mg-close"]');
   ok(app().game.live.day.call.batter === ph && text('.call').includes(app().game.name(ph)), 'a pinch hitter steps in at once');
   ok([...doc.querySelectorAll('.w-log .log-line')].some((e) => e.textContent!.startsWith('Pinch hitter')), 'and the log says so');
   ok(app().game.movedByHand, 'a move of your own marks the year (no password replay)');
@@ -231,6 +247,13 @@ async function main() {
   ok(!doc.querySelector('[data-act="lineup-move"]:not([disabled])') || doc.querySelector('.row-actions .note'), 'sorting by a stat hides the order arrows');
   await click('[data-act="roster-sort"][data-k="order"]');
   await click('[data-act="roster-cols"][data-c="ratings"]');
+  await click('[data-act="cmp-toggle"]');
+  const cmpIds = [...doc.querySelectorAll<HTMLElement>('[data-act="cmp-pick"]')].slice(0, 2).map((e) => e.dataset.id);
+  await click(`[data-act="cmp-pick"][data-id="${cmpIds[0]}"]`); await click(`[data-act="cmp-pick"][data-id="${cmpIds[1]}"]`);
+  ok(doc.querySelectorAll('.modal .bcard').length === 2, 'COMPARE puts two Baseball Cards side by side');
+  await click('.modal .bc-flip');
+  ok(doc.querySelector('.modal .bc-splits'), 'a card flips to its splits');
+  await click('[data-act="close"]'); await click('[data-act="cmp-toggle"]');
   const first = app().game.plan.lineup[0].player.id;
   await click('[data-act="lineup-move"][data-i="0"][data-dir="1"]');
   ok(app().game.plan.lineup[1].player.id === first && app().game.team.auto.lineup === false, 'the arrows reorder your lineup and take it off AUTO');

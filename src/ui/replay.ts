@@ -27,7 +27,12 @@ export interface Frame {
   stinger?: 'homer' | 'walkoff';
 }
 
-export interface LogLine { key: number; inning: number; half: 0 | 1; text: string; runs: number; score: [number, number]; kind: 'pa' | 'steal' | 'wp' | 'change'; /** CSS tone for the play (stats.ts playTone). */ tone?: string }
+export interface LogLine {
+  key: number; inning: number; half: 0 | 1; text: string; runs: number; score: [number, number]; kind: 'pa' | 'steal' | 'wp' | 'change';
+  /** CSS tone for the play (stats.ts playTone). */ tone?: string;
+  /** Plate appearances: the pitch bytes, batter and pitcher, for looking back at the at-bat. */
+  ab?: { pitches: number[]; batter: number; pitcher: number };
+}
 
 export interface Replay { result: GameResult; frames: Frame[]; log: LogLine[] }
 
@@ -73,8 +78,8 @@ export function buildReplay(
       today: todayText(batter), ...extra,
     });
   };
-  const addLog = (kind: LogLine['kind'], text: string, runs: number, tone = '') =>
-    log.push({ key: st.key, inning: st.inning, half: st.half, text, runs, score: [st.score[0], st.score[1]], kind, tone });
+  const addLog = (kind: LogLine['kind'], text: string, runs: number, tone = '', ab?: LogLine['ab']) =>
+    log.push({ key: st.key, inning: st.inning, half: st.half, text, runs, score: [st.score[0], st.score[1]], kind, tone, ...(ab ? { ab } : {}) });
   const score = (runs: number) => {
     st.score[st.half] += runs;
     st.line[st.half][st.inning - 1] += runs;
@@ -164,7 +169,7 @@ export function buildReplay(
       if (isHit(pa.play)) st.hits[pa.half]++;
       if (pa.play === Play.ReachedOnError) st.errors[1 - pa.half]++;
       const text = eventText(pa, name, 'final');
-      addLog('pa', eventText(pa, name, detail), pa.runs, playTone(pa.play));
+      addLog('pa', eventText(pa, name, detail), pa.runs, playTone(pa.play), { pitches: [...pa.pitches], batter: pa.batter, pitcher: pa.pitcher });
       const lastEvent = i === events.length - 1;
       const walkoff = lastEvent && pa.half === 1 && st.score[1] > st.score[0];
       const tone: Tone = pa.play === Play.HomeRun || walkoff ? 'big' : toneFor(isHit(pa.play) || pa.runs > 0 || pa.play === Play.Walk || pa.play === Play.HitByPitch);

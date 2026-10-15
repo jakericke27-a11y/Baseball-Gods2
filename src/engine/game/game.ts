@@ -6,7 +6,7 @@
  * changes, decisions, box score, clutch moments, and the event log.
  */
 import { simulateAtBat, MAX_PITCHES, type Defense } from '../atbat/atbat';
-import { Loc, Outcome, pitchLocOf, pitchResultOf } from '../atbat/codes';
+import { BattedBall, Loc, Outcome, PitchResult, encodePitch, pitchLocOf, pitchResultOf } from '../atbat/codes';
 import type { AtBatParams } from '../atbat/params';
 import { ByteLog } from '../log';
 import { logit, sigmoid, z } from '../math';
@@ -15,8 +15,9 @@ import type { Player } from '../types';
 import {
   Ev, Moment, Play, newBatLine, newPitchLine,
   type BatLine, type BullpenArm, type BullpenRole, type GameCall, type GameMoment, type GameMove, type GameResult, type LineupSlot,
-  type PitchLine, type Sub, type TeamGameSetup,
+  type PitchLine, type Sub, type TeamGameSetup, type Alignment, type BatCall, type PitchCall,
 } from './types';
+import { NORMAL_ALIGN, RUN_TACTIC, tacticFor } from './tactics';
 
 interface Runner { id: number; pid: number; earned: boolean; spd: number }
 interface PitcherState {
@@ -93,6 +94,9 @@ export function* playGame(
   const budgets = new Map<number, number>();
   const enteredLead = new Map<number, number>();
   const potW = [0, 0], potL = [0, 0];
+  // Manager calls (one plate appearance) and alignments (until changed). The AI makes none.
+  const calls = { bat: [null, null] as [BatCall | null, BatCall | null], pitch: [null, null] as [PitchCall | null, PitchCall | null] };
+  const align: [Alignment, Alignment] = [{ ...NORMAL_ALIGN }, { ...NORMAL_ALIGN }];
 
   const defense: Defense[] = teams.map((t) => {
     const fielders: Defense['fielders'] = new Array(10);
@@ -194,6 +198,11 @@ export function* playGame(
     } else if (m.kind === 'sub') {
       const p = benchPlayer(m.side, m.id);
       if (p && lineups[m.side][m.slot] && (m.why !== 'hitter' || m.side === bat)) replaceSlot(m.side, m.slot, p, m.why, bat);
+    } else if (m.kind === 'call') {
+      if (m.bat !== undefined && m.side === bat) calls.bat[bat] = m.bat;
+      if (m.pitch !== undefined && m.side === fld) calls.pitch[fld] = m.pitch;
+    } else if (m.kind === 'align') {
+      if (m.side === 0 || m.side === 1) align[m.side] = { infield: m.infield ?? align[m.side].infield, outfield: m.outfield ?? align[m.side].outfield };
     } else if (m.kind === 'runner') {
       const rn = bases[m.base], p = benchPlayer(m.side, m.id);
       if (!rn || !p || m.side !== bat) return;
@@ -214,6 +223,7 @@ export function* playGame(
       aiPitch, lineups: lineups.map((l) => l.map((x): [number, number] => [x.player.id, x.pos])),
       used: [[...used[0], ...gone[0], ...appeared[0]], [...used[1], ...gone[1], ...appeared[1]]],
       log: log ? log.toBytes() : null, pitchersUsed: [pitchersUsed[0].slice(), pitchersUsed[1].slice()],
+      calls: { bat: [calls.bat[0], calls.bat[1]], pitch: [calls.pitch[0], calls.pitch[1]] }, align: [{ ...align[0] }, { ...align[1] }],
     };
   };
 
@@ -255,7 +265,9 @@ export function* playGame(
       const PL = pl(ps.p.id);
 
       // ---- Steal attempt before the pitch (2nd with 2nd open, or 3rd with 3rd open) ----
-      const from = bases[0] && !bases[1] ? 0 : bases[1] && !bases[2] ? 1 : -1;
+      const bc = calls.bat[bat], pc = calls.pitch[fld];
+      const pushRunners = bc === 'move' || bc === 'hitrun';
+      const from = bc === 'hitrun' ? -1 : bases[0] && !bases[1] ? 0 : bases[1] && !bases[2] ? 1 : -1;
       if (from >= 0) {
         const rn = bases[from]!;
         const c = defense[fld].fielders[2];
@@ -280,10 +292,19 @@ export function* playGame(
       const risp = bases[1] !== null || bases[2] !== null;
       const lateClose = inning >= 7 && Math.abs(diffBefore) <= 1;
       const fatigue = Math.max(0, (ps.pitches / ps.budget - 0.65) / 0.35);
-      const r = simulateAtBat(batter, ps.p, { fatigue, clutch: clutchShift(batter, ps.p, risp, lateClose), defense: defense[fld] }, P, rng, scratch);
+      const tactic = tacticFor(bc, pc, align[fld]);
+      let r: ReturnType<typeof simulateAtBat>;
+      if (pc === 'ibb') { // four wide ones, no dice
+        for (let i = 0; i < 4; i++) scratch[i] = encodePitch(PitchResult.Ball, Loc.Chase);
+        r = { outcome: Outcome.Walk, pitches: 4, battedBall: BattedBall.None, quality: NaN, fielder: 0 };
+      } else {
+        r = simulateAtBat(batter, ps.p, { fatigue, clutch: clutchShift(batter, ps.p, risp, lateClose), defense: defense[fld], ...(tactic ? { tactic } : {}) }, P, rng, scratch);
+      }
+      calls.bat[bat] = null; calls.pitch[fld] = null;
       ps.pitches += r.pitches; halfPitches += r.pitches;
       let chase = 0;
       for (let i = 0; i < r.pitches; i++) { pitchResults[pitchResultOf(scratch[i])]++; if (pitchLocOf(scratch[i]) === Loc.Chase) chase++; }
+      if (pc === 'ibb') chase = 0;
 
       // ---- Wild pitch / passed ball during the at-bat: every runner moves up a base ----
       if ((bases[0] || bases[1] || bases[2]) && chase > 0) {
@@ -380,7 +401,7 @@ export function* playGame(
           }
           if (r1 && outs < 3) {
             const go = RUN.firstToThirdOnSingle + 0.55 * r1.spd - 0.4 * fArm + (outsBefore === 2 ? 0.5 : 0) +
-              (fpos === 9 ? 0.5 : fpos === 8 ? 0.2 : -0.9);
+              (fpos === 9 ? 0.5 : fpos === 8 ? 0.2 : -0.9) + (bc === 'hitrun' ? RUN_TACTIC.hitRunFirstToThird : 0);
             if (outfield && !bases[2] && rng.next() < sigmoid(go)) {
               if (rng.next() < sigmoid(RUN.safeAtThird + 0.5 * r1.spd - 0.5 * fArm)) { bases[2] = r1; mv(r1, 1, 3); }
               else { mv(r1, 1, 6); out(); }
@@ -434,7 +455,8 @@ export function* playGame(
             break;
           }
           if (r1) {
-            const dp = RUN.doublePlay - 0.35 * br.spd + 0.25 * fGlove + 0.15 * fArm - 0.15 * r1.spd;
+            const dp = RUN.doublePlay - 0.35 * br.spd + 0.25 * fGlove + 0.15 * fArm - 0.15 * r1.spd +
+              (pushRunners ? RUN_TACTIC.noDoublePlay : 0) + (align[fld].infield === 'dp' ? RUN_TACTIC.dpDepth : 0);
             if (rng.next() < sigmoid(dp)) {
               play = Play.DoublePlay; B.GIDP++;
               bases[0] = null; mv(r1, 1, 5); mv(br, 0, 0); out(2);
@@ -442,7 +464,7 @@ export function* playGame(
                 if (r3) { bases[2] = null; if (scoreRun(r3, false)) mv(r3, 3, 4); }
                 if (r2) { bases[1] = null; bases[2] = r2; mv(r2, 2, 3); }
               }
-            } else if (rng.next() < RUN.fieldersChoice) {
+            } else if (!pushRunners && rng.next() < RUN.fieldersChoice) {
               play = Play.FieldersChoice;
               mv(r1, 1, 5); out();
               bases[0] = br; mv(br, 0, 1); bases[1] = null;
@@ -462,10 +484,10 @@ export function* playGame(
           } else {
             out(); mv(br, 0, 0);
             if (outs < 3) {
-              if (r3 && rng.next() < sigmoid(RUN.scoreOnGroundout + 0.4 * r3.spd)) {
+              if (r3 && rng.next() < sigmoid(RUN.scoreOnGroundout + 0.4 * r3.spd + (align[fld].infield === 'in' ? RUN_TACTIC.infieldInHold : 0) + (pushRunners ? 0.7 : 0))) {
                 bases[2] = null; if (scoreRun(r3, true)) mv(r3, 3, 4);
               }
-              if (r2 && !bases[2] && rng.next() < (fpos === 3 || fpos === 4 ? 0.6 : 0.22)) {
+              if (r2 && !bases[2] && (pushRunners || rng.next() < (fpos === 3 || fpos === 4 ? 0.6 : 0.22))) {
                 bases[1] = null; bases[2] = r2; mv(r2, 2, 3);
               }
             }

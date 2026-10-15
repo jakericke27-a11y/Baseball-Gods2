@@ -3,6 +3,9 @@
  * in step. Screens are HTML strings (views/); one delegated listener handles every button.
  */
 import { flowColumns } from './flow';
+import { loadArt } from './art';
+import { newSplitView, type SplitView } from './views/card';
+import { newManage, type ManageState, type ManageTarget } from './views/manage';
 import { newBoardState, type BoardState } from './views/board';
 import { DRAFT_SPEEDS } from './views/draft';
 import { gameDays } from './views/screens';
@@ -13,7 +16,7 @@ import { release, signFreeAgent, swap, toggleClaim, type MoveError } from '../en
 import { lightingAt, type Lighting } from '../engine/season/schedule';
 import type { League } from '../engine/types';
 import { autoPick, autoPicks, done, onClock, pick, type DraftState } from '../engine/draft';
-import type { GameMove, GameResult } from '../engine/game/types';
+import type { BatCall, GameMove, GameResult, InfieldAlign, OutfieldAlign, PitchCall } from '../engine/game/types';
 import { finishFounding, foundingLeague, generateLeague } from '../engine/generate';
 import { promote } from '../engine/offseason';
 import { Music } from './audio';
@@ -27,7 +30,7 @@ import { applyTeamColors, teamColors, teamName } from './teams';
 import { view } from './views';
 
 export type Screen = 'title' | 'picker' | 'draft' | 'home' | 'watch' | 'standings' | 'games' | 'leaders' | 'races' | 'scouting' | 'roster' | 'gamelog' | 'news' | 'offseason';
-export type Modal = { kind: 'settings' } | { kind: 'player'; id: number } | { kind: 'password' } | { kind: 'restart' };
+export type Modal = { kind: 'settings' } | { kind: 'player'; id: number } | { kind: 'card'; id: number } | { kind: 'compare'; a: number; b: number } | { kind: 'password' } | { kind: 'restart' };
 /** Live games: who makes your team's moves. 'ask': the bench coach asks first; 'me': nothing moves unless you do;
  *  'ai': the bench coach decides and play flows (you can still step in). */
 export type ManagerMode = 'ask' | 'me' | 'ai';
@@ -81,6 +84,15 @@ export class App {
   rosterTeam = 0;
   rosterTab: 'lineup' | 'moves' = 'lineup';
   rosterCols: 'ratings' | 'stats' = 'ratings';
+  /** Baseball Cards turned to their backs ("context:id"), and how the backs' splits are shown. */
+  cardBack = new Set<string>();
+  splitView: SplitView = newSplitView();
+  /** The MANAGE screen in a live game: who's coming out, who's going in, and where. */
+  manage: ManageState = newManage();
+  /** Roster COMPARE: on, and the first player picked. */
+  cmp = { on: false, a: 0 };
+  /** The game-log line opened to show its at-bat (-1: none). */
+  logAb = -1;
   /** Windows folded away (the scouting hub's right column). */
   folded = new Set<string>();
   rosterSort: { k: string; desc: boolean } = { k: 'order', desc: false };
@@ -137,6 +149,21 @@ export class App {
     root.addEventListener('click', (e) => this.onClick(e));
     root.addEventListener('change', (e) => this.onChange(e));
     root.addEventListener('submit', (e) => { e.preventDefault(); this.onSubmit(e); });
+    // MANAGE: drag cards between the field, the dugout and the bullpen
+    root.addEventListener('dragstart', (e) => {
+      const el = (e.target as HTMLElement).closest<HTMLElement>('[data-pid][draggable="true"]');
+      if (!el || !e.dataTransfer) return;
+      e.dataTransfer.setData('text/plain', JSON.stringify({ pid: Number(el.dataset.pid), from: el.dataset.from ?? '', own: el.dataset.drop ?? '' }));
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    root.addEventListener('dragover', (e) => { if ((e.target as HTMLElement).closest('[data-drop]')) e.preventDefault(); });
+    root.addEventListener('drop', (e) => {
+      const el = (e.target as HTMLElement).closest<HTMLElement>('[data-drop]');
+      const raw = e.dataTransfer?.getData('text/plain');
+      if (!el || !raw) return;
+      e.preventDefault();
+      try { const d = JSON.parse(raw) as { pid: number; from: string; own: string }; this.manageDrop(d.pid, d.from, d.own, el.dataset.drop!, Number(el.dataset.pid ?? 0)); } catch { /* not ours */ }
+    });
     document.addEventListener('keydown', (e) => this.onKey(e));
     let rt = 0;
     window.addEventListener('resize', () => { clearTimeout(rt); rt = window.setTimeout(() => { this.parkKey = ''; this.updatePark(); }, 120); });
@@ -147,6 +174,7 @@ export class App {
 
   /** Boot, optionally resuming a save (used when the page is updated while open). */
   async start(resume?: { save?: SaveData; screen?: Screen }): Promise<void> {
+    void loadArt().then((any) => { if (any) this.render(); });
     const row = await getLeague(SLOT);
     this.slot = row?.meta ?? null;
     if (this.slot) applyTeamColors(teamColors(this.slot.team));
@@ -464,6 +492,7 @@ export class App {
   /** Play today and watch your game. */
   /** Play today with your game live: the rest of the league sims around it. */
   watchToday(): void {
+    this.logAb = -1; this.manage = newManage();
     const g = this.game;
     if (!g || g.over) return;
     if (!g.startLive()) { g.simDay(); this.persist(); this.render(); return; }
@@ -548,6 +577,67 @@ export class App {
     this.render();
   }
 
+  // ------------------------------------------------------------------ MANAGE
+
+  private static parseTarget(s: string): ManageTarget | null {
+    if (s === 'pitcher') return { kind: 'pitcher' };
+    const [k, n] = s.split(':');
+    if (k === 'slot') return { kind: 'slot', slot: Number(n) };
+    if (k === 'base') return { kind: 'base', base: Number(n) };
+    return null;
+  }
+
+  /** Pick a card by clicking: the player coming out (field, mound, batter, runner), then who goes in (dugout, bullpen). */
+  manageClick(pid: number, from: string, own: string): void {
+    const m = this.manage, g = this.game, c = g?.live?.day.call;
+    if (!g || !c) return;
+    m.msg = '';
+    if (from === 'bench' || from === 'pen') {
+      if (from === 'pen' && m.target && m.target.kind !== 'pitcher') { m.msg = 'Relievers come in on the mound.'; this.render(); return; }
+      if (from === 'bench' && m.target?.kind === 'pitcher') { m.msg = 'Pick a reliever from the bullpen for the mound.'; this.render(); return; }
+      m.in = pid;
+      if (from === 'pen' && !m.target) { m.target = { kind: 'pitcher' }; m.out = c.pitchers[g.liveSide].id; }
+    } else {
+      const t = App.parseTarget(own);
+      if (!t) return;
+      if (m.in && ((t.kind === 'pitcher') !== (g.players.get(m.in)?.position === 'P'))) m.in = 0;
+      m.out = pid; m.target = t;
+    }
+    this.render();
+  }
+
+  /** A card dropped somewhere: onto a player (swap him out for it) or onto an OUT slot (he's coming out). */
+  private manageDrop(pid: number, from: string, own: string, drop: string, onto: number): void {
+    const m = this.manage;
+    if (drop === 'bench-out' || drop === 'pen-out') {
+      if (from === 'bench' || from === 'pen') return;
+      if ((drop === 'pen-out') !== (from === 'mound')) { m.msg = drop === 'pen-out' ? 'Only the pitcher goes to the bullpen.' : 'The pitcher comes out to the bullpen.'; this.render(); return; }
+      this.manageClick(pid, from, own);
+      return;
+    }
+    if (from === 'bench' || from === 'pen') {
+      const t = App.parseTarget(drop);
+      if (!t || !onto) return;
+      if ((t.kind === 'pitcher') !== (from === 'pen')) { m.msg = from === 'pen' ? 'Relievers come in on the mound.' : 'Bench players replace a fielder, the batter or a runner.'; this.render(); return; }
+      m.out = onto; m.target = t; m.in = pid; m.msg = '';
+      this.render();
+      return;
+    }
+    m.msg = 'Moving a fielder to another position comes later: swap in from the dugout instead.';
+    this.render();
+  }
+
+  private manageConfirm(): void {
+    const m = this.manage, g = this.game, c = g?.live?.day.call;
+    if (!g || !c || !m.in || !m.target) return;
+    const me = g.liveSide, t = m.target;
+    const move: GameMove = t.kind === 'pitcher' ? { kind: 'pitcher', side: me, id: m.in }
+      : t.kind === 'base' ? { kind: 'runner', side: me, base: t.base, id: m.in }
+      : { kind: 'sub', side: me, slot: t.slot, id: m.in, why: c.half === me && t.slot === c.slot ? 'hitter' : 'field' };
+    this.manage = { ...newManage(), open: true };
+    this.liveMove(move);
+  }
+
   /** The live game is waiting on a pitching decision from you (Ask me or Me mode). */
   liveBlocked(): boolean {
     const g = this.game, c = g?.live?.day.call;
@@ -573,6 +663,7 @@ export class App {
   }
 
   openReplay(index: number): void {
+    this.logAb = -1; this.manage = newManage();
     const g = this.game!;
     const r = g.season.results[index];
     this.stopAuto();
@@ -699,11 +790,12 @@ export class App {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (this.screen === 'title' && this.titleStage === 'press') { e.preventDefault(); this.pressStart(); return; }
     if (e.key === 'Escape') {
+      if (this.manage.open) { this.manage = newManage(); this.render(); return; }
       if (this.modal) { this.modal = null; this.restartArmed = false; this.render(); return; }
       if (this.screen !== 'title' && this.screen !== 'home' && this.game && !this.busy) { void this.act('go', { to: 'home' }); return; }
     }
     const tag = (e.target as HTMLElement).tagName;
-    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || this.modal || this.busy) return;
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || this.modal || this.busy || this.manage.open) return;
     if (this.screen === 'watch' && this.watch) {
       if (e.key === ' ') { e.preventDefault(); this.stepWatch(this.watch.at + 1); }
       else if (e.key === 'a' || e.key === 'A') this.stepWatch(nextAtBat(this.watch.replay, this.watch.at));
@@ -888,16 +980,23 @@ export class App {
         if (w && g?.live) { const stop = this.liveStop(); if (stop?.block) { w.alert = stop.text; this.render(); return; } w.alert = ''; const res = g.liveAdvance(); if (res || !g.live) { this.liveDone(); return; } w.replay = this.liveReplay(); this.stepWatch(w.at + 1); }
         return;
       }
-      case 'live-pitch': case 'live-ph': case 'live-pr': case 'live-def': {
-        if (!g?.live) return;
-        const val = (sel: string) => Number(this.root.querySelector<HTMLSelectElement>(sel)?.value ?? 0);
-        const me = g.liveSide;
-        if (act === 'live-pitch') { const id = val('#live-pitch-sel'); if (id) this.liveMove({ kind: 'pitcher', side: me, id }); }
-        else if (act === 'live-ph') { const id = val('#live-ph-sel'); if (id) this.liveMove({ kind: 'sub', side: me, slot: g.live.day.call!.slot, id, why: 'hitter' }); }
-        else if (act === 'live-pr') { const id = val('#live-pr-sel'), base = val('#live-pr-base'); if (id) this.liveMove({ kind: 'runner', side: me, base, id }); }
-        else { const id = val('#live-def-sel'), slot = val('#live-def-slot'); if (id) this.liveMove({ kind: 'sub', side: me, slot, id, why: 'field' }); }
-        return;
+      case 'cmp-toggle': this.cmp = { on: !this.cmp.on, a: 0 }; this.render(); return;
+      case 'cmp-pick': {
+        const id = Number(d.id);
+        if (!this.cmp.a || this.cmp.a === id) { this.cmp.a = this.cmp.a === id ? 0 : id; this.render(); return; }
+        this.modal = { kind: 'compare', a: this.cmp.a, b: id }; this.cmp.a = 0; this.render(); return;
       }
+      case 'log-ab': this.logAb = this.logAb === Number(d.i) ? -1 : Number(d.i); this.render(); return;
+      case 'mg-show': if (g?.live && this.liveEdge()) { this.stopAuto(); this.manage = { ...newManage(), open: true }; this.render(); } return;
+      case 'mg-close': this.manage = newManage(); this.render(); return;
+      case 'mg-cancel': this.manage = { ...newManage(), open: true }; this.render(); return;
+      case 'mg-pick': this.manageClick(Number(d.pid), d.from ?? '', d.drop ?? ''); return;
+      case 'mg-open': return;
+      case 'mg-confirm': this.manageConfirm(); return;
+      case 'mg-bat': if (g?.live) this.liveMove({ kind: 'call', side: g.liveSide, bat: d.v === 'none' ? null : (d.v as BatCall) }); return;
+      case 'mg-pitch': if (g?.live) this.liveMove({ kind: 'call', side: g.liveSide, pitch: d.v === 'none' ? null : (d.v as PitchCall) }); return;
+      case 'mg-inf': if (g?.live) this.liveMove({ kind: 'align', side: g.liveSide, infield: d.v as InfieldAlign }); return;
+      case 'mg-of': if (g?.live) this.liveMove({ kind: 'align', side: g.liveSide, outfield: d.v as OutfieldAlign }); return;
       case 'w-auto': this.toggleAuto(); return;
       case 'w-box': if (this.watch) { this.stopAuto(); void this.act('go', { to: 'games', index: String(this.watch.index) }); } return;
       case 'games-day': {
@@ -915,6 +1014,10 @@ export class App {
       case 'form-days': this.formDays = Number(d.days) as App['formDays']; this.render(); return;
       case 'news': if (g) { this.screen = 'news'; this.render(); } return;
       case 'roster-tab': this.rosterTab = d.tab as App['rosterTab']; this.releaseArmed = 0; this.render(); return;
+      case 'card-flip': { const k = `${d.ctx}:${d.id}`; if (this.cardBack.has(k)) this.cardBack.delete(k); else this.cardBack.add(k); this.render(); return; }
+      case 'split-group': this.splitView.group = d.g as SplitView['group']; this.render(); return;
+      case 'split-sort': { const v = this.splitView; if (v.sort === d.k) v.desc = !v.desc; else { v.sort = d.k!; v.desc = true; } this.render(); return; }
+      case 'card': this.modal = { kind: 'card', id: Number(d.id) }; this.render(); return;
       case 'win-fold': { const id = d.id!; if (this.folded.has(id)) this.folded.delete(id); else this.folded.add(id); this.render(); return; }
       case 'roster-cols': this.rosterCols = d.c as App['rosterCols']; if (!['order', 'name', 'age'].includes(this.rosterSort.k)) this.rosterSort = { k: 'order', desc: false }; this.render(); return;
       case 'roster-sort': { const s = this.rosterSort; this.rosterSort = s.k === d.k ? { k: d.k!, desc: !s.desc } : { k: d.k!, desc: !['order', 'name', 'b', 't', 'fat'].includes(d.k!) }; this.render(); return; }
