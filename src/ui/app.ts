@@ -10,7 +10,8 @@ import { newManage, type ManageState, type ManageTarget } from './views/manage';
 import { newBoardState, type BoardState } from './views/board';
 import { DRAFT_SPEEDS } from './views/draft';
 import { gameDays } from './views/screens';
-import type { LeadState } from './views/leaders';
+import type { LeadState } from './views/storylines';
+import { BOOK_ROW_MIN, currentBook, newBookState, type BookState } from './views/records';
 import type { PitchDetail } from '../engine/game/text';
 import { regularOver } from '../engine/season/season';
 import { release, signFreeAgent, swap, toggleClaim, type MoveError } from '../engine/roster';
@@ -30,7 +31,7 @@ import { SLOT, deleteLeague, getLeague, putLeague, requestPersistence } from './
 import { applyTeamColors, teamColors, teamName } from './teams';
 import { view } from './views';
 
-export type Screen = 'title' | 'picker' | 'draft' | 'home' | 'watch' | 'standings' | 'games' | 'leaders' | 'races' | 'scouting' | 'roster' | 'gamelog' | 'news' | 'offseason' | 'desk';
+export type Screen = 'title' | 'picker' | 'draft' | 'home' | 'watch' | 'standings' | 'games' | 'leaders' | 'races' | 'scouting' | 'roster' | 'gamelog' | 'news' | 'offseason' | 'desk' | 'storylines' | 'records';
 export type Modal = { kind: 'settings' } | { kind: 'player'; id: number } | { kind: 'card'; id: number } | { kind: 'compare'; a: number; b: number } | { kind: 'landed'; titles: string[] } | { kind: 'password' } | { kind: 'restart' };
 /** Live games: who makes your team's moves. 'ask': the bench coach asks first; 'me': nothing moves unless you do;
  *  'ai': the bench coach decides and play flows (you can still step in). */
@@ -109,7 +110,9 @@ export class App {
   draftLive: { paused: boolean; speed: keyof typeof DRAFT_SPEEDS; fresh: number } = { paused: false, speed: 'normal', fresh: 0 };
   private draftTimer: ReturnType<typeof setTimeout> | null = null;
   /** The Leaders screen: which view and filters. */
-  lead: LeadState = { view: 'leaders', scope: 'all', side: 'bat', when: 'season' };
+  lead: LeadState = { view: 'race', scope: 'all', side: 'bat', when: 'season' };
+  /** The record books: which is open, at which page. */
+  book: BookState = newBookState();
   /** The winter report: your team or the whole league. */
   offScope: 'team' | 'league' = 'team';
   /** Hot and cold: the window in days. */
@@ -169,7 +172,7 @@ export class App {
     });
     document.addEventListener('keydown', (e) => this.onKey(e));
     let rt = 0;
-    window.addEventListener('resize', () => { clearTimeout(rt); rt = window.setTimeout(() => { this.parkKey = ''; this.updatePark(); }, 120); });
+    window.addEventListener('resize', () => { clearTimeout(rt); rt = window.setTimeout(() => { this.parkKey = ''; this.updatePark(); this.fitBook(); }, 120); });
     void this.music.loadManifest();
   }
 
@@ -308,6 +311,7 @@ export class App {
     else if (this.modal) this.root.querySelector<HTMLElement>('.modal [data-autofocus], .modal button')?.focus({ preventScroll: true });
 
     this.streakFlips();
+    this.fitBook();
     this.draftClock();
     this.updatePark();
     this.updateMusic();
@@ -753,6 +757,7 @@ export class App {
     const el = e.target as HTMLInputElement | HTMLSelectElement;
     const act = el.dataset.act;
     if (!act) return;
+    if (act === 'book-team') { this.book.team = Number(el.value); this.book.at.team = 0; this.book.from = null; this.render(); return; }
     if (this.game && (act === 'lineup-pos' || act === 'lineup-sub' || act === 'rot-swap' || act === 'pen-role' || act === 'call-up')) {
       const g = this.game, i = Number(el.dataset.i), v = el.value;
       if (!v) return;
@@ -803,16 +808,46 @@ export class App {
     }
   }
 
+  /** An open book shows 20 rows a page when they fit at a readable height, otherwise 10. */
+  private fitBook(): void {
+    if (this.screen !== 'records' || !this.book.open) return;
+    // measured on the page itself (not one page's table), so every spread of a book gets the same answer
+    const pg = this.root.querySelector<HTMLElement>('.bk-spread > .bk-page');
+    if (!pg || !pg.clientHeight) return;
+    const cs = getComputedStyle(pg);
+    const head = pg.querySelector<HTMLElement>('.bk-head')?.offsetHeight ?? 44;
+    const rows = pg.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - head - 28; // 28: room for a note
+    const per: 10 | 20 = rows / 21 >= BOOK_ROW_MIN ? 20 : 10;
+    if (per !== this.book.per) { this.book.per = per; this.render(); }
+  }
+
+  /** Turn the open book to the spread holding `page`, with the page-turn. */
+  private bookTurn(page: number): void {
+    const b = currentBook(this), s = this.book;
+    if (!b || !s.open) return;
+    const to = Math.max(0, Math.min(b.pages.length - 2, page - (page % 2)));
+    if (to === s.at[s.open]) return;
+    s.from = s.at[s.open];
+    s.at[s.open] = to;
+    this.render();
+  }
+
   private onKey(e: KeyboardEvent): void {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (this.screen === 'title' && this.titleStage === 'press') { e.preventDefault(); this.pressStart(); return; }
     if (e.key === 'Escape') {
       if (this.manage.open) { this.manage = newManage(); this.render(); return; }
       if (this.modal) { this.modal = null; this.restartArmed = false; this.render(); return; }
+      if (this.screen === 'records' && this.book.open) { this.book.open = null; this.render(); return; }
       if (this.screen !== 'title' && this.screen !== 'home' && this.game && !this.busy) { void this.act('go', { to: 'home' }); return; }
     }
     const tag = (e.target as HTMLElement).tagName;
     if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || this.modal || this.busy || this.manage.open) return;
+    if (this.screen === 'records' && this.book.open && ['ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown'].includes(e.key)) {
+      e.preventDefault();
+      this.bookTurn(this.book.at[this.book.open] + (e.key === 'ArrowRight' || e.key === 'PageDown' ? 2 : -2));
+      return;
+    }
     if (this.screen === 'watch' && this.watch) {
       if (e.key === ' ') { e.preventDefault(); this.stepWatch(this.watch.at + 1); }
       else if (e.key === 'a' || e.key === 'A') this.stepWatch(nextAtBat(this.watch.replay, this.watch.at));
@@ -947,7 +982,10 @@ export class App {
         if (to === 'games' && d.index !== undefined) { this.gamesPick = Number(d.index); this.gamesDay = g.season.results[this.gamesPick].day; }
         if (to === 'gamelog' && d.index !== undefined) this.logPick = Number(d.index);
         if (to === 'roster' && d.team !== undefined) this.rosterTeam = Number(d.team);
-        this.screen = to;
+        // Leaders, Races and the game log are sections of the Storylines paper now
+        const section = ({ leaders: 'leaders', races: 'race', gamelog: 'yours' } as const)[to as 'leaders' | 'races' | 'gamelog'];
+        if (section) this.lead.view = section;
+        this.screen = section ? 'storylines' : to;
         this.modal = null;
         this.render();
         return;
@@ -1040,6 +1078,10 @@ export class App {
       case 'games-pick': this.gamesPick = Number(d.index); this.render(); return;
       case 'log-pick': this.logPick = Number(d.index); this.render(); return;
       case 'lead': (this.lead as unknown as Record<string, string>)[d.k!] = d.v!; this.render(); return;
+      case 'book-open': this.book.open = d.book as BookState['open']; this.book.from = null; this.render(); return;
+      case 'book-close': this.book.open = null; this.render(); return;
+      case 'book-flip': this.bookTurn(this.book.open ? this.book.at[this.book.open] + 2 * Number(d.dir) : 0); return;
+      case 'book-tab': this.bookTurn(Number(d.page)); return;
       case 'off-scope': this.offScope = d.scope as App['offScope']; this.render(); return;
       case 'form-days': this.formDays = Number(d.days) as App['formDays']; this.render(); return;
       case 'news': if (g) { this.screen = 'news'; this.render(); } return;

@@ -147,6 +147,10 @@ current season keeps games and pitch logs. Retired players stay in `league.retir
 About 140 KB of JSON (≈50 KB compressed) per season, two thirds of it the ratings snapshot: a century fits.
 Ratings change only over the winter today, so one snapshot per season is exact; add in-season snapshots when
 something changes ratings mid-year.
+Since step 2.9 each summary also keeps a **chronicle** (`engine/chronicle.ts`): every team's ten highest-Drama games
+as compact rows (the union, so the league's best are in it), and league-wide batting splits (platoon, venue, bases,
+outs, inning, month) read from the logs. About 5 KB a season. Seasons summarized before 2.9 have neither; the books
+say so instead of guessing.
 
 ## Modifiers and the Gods' decree (`engine/modifiers.ts`, `engine/decree.ts`)
 **Modifiers** are the one system for every bounded effect stacked on the honest baseline. Each has a source, a
@@ -381,6 +385,29 @@ New-engine guards: runs vs BaseRuns check, RBI ≤ R, per-team start limits by r
   Password replays draw no cards. **Missions**: Prove It (homers in 30 days), Seven of Ten, Give Me the Ball (7 innings
   in three straight starts), with progress from the season's own stats. First deck: 11 storyline, 4 game, 3 winter
   (including the decree as a card). Each card is an art slot (`dcard_<id>`, 120x64).
+- 2026-10-15 — The record books and the Gazette (step 2.9). **Records** (`ui/books.ts`, `ui/views/records.ts`): a desk
+  with three books (art slots `book_team`, `book_league`, `book_three`, `book_spread`, `desk_top`). Book 1 is one team's
+  (yours, or any team from its contents page), Book 2 the league's, Book 3 is blank for now. An open book fills the page:
+  two pages a spread, one stat or view per page, 20 rows a page when they fit at 22px or more and otherwise 10
+  (`App.fitBook` measures the page, so every spread of a book gets the same answer); long lists run on to "(cont.)"
+  pages; each tab starts on a left page; ribbons jump to a tab; ◂ ▸, page corners and the arrow keys turn pages with a
+  3D page-turn (a leaf over the spine; off with reduced motion); Esc closes the book. The books count everything through
+  today (the season in progress is marked *). Team book: at a glance, year by year, postseason by round and every
+  series, team batting and pitching by year, greatest players and longest tenured (by VALUE with the team), legends
+  who played here, awards (waits for 3.6), franchise career leaders (12 batting, 8 pitching), best seasons (12), and
+  greatest games by Drama. League book: at a glance, champions, the decrees, the franchises (titles, pennants,
+  playoffs), the honor roll, greatest careers and seasons, career leaders, single-season records, greatest games, eras
+  (four league-average pages by year, by decade once the years outgrow a page) and splits at the back (this year and
+  all time). **VALUE** is an interim WAR stand-in until 3.6: batting runs above average from linear weights plus 18
+  runs per 600 PA, pitching runs saved against 1.2x the league's run rate, in wins (10 runs); a season sums to about
+  1,000 wins, ~55% hitters. No fielding or position adjustment. **The honor roll** (a stand-in Hall of Fame until 3.7):
+  retired players with 45 career value, or 500 HR, 3,000 hits, 300 wins or 3,000 strikeouts. **Storylines**
+  (`ui/views/storylines.ts`): Leaders, Races and the game log became one screen, the Gazette, an old newspaper on a
+  scroll (the windows lose their frames and the palette turns to ink on parchment). Sections: THE RACE, LEADERS,
+  LEADER RACES, STREAKS, HOT & COLD, BIG GAMES (the last 30 days, the year and yours, by Drama) and YOUR GAMES (the
+  game log). The old screen names still open their section. The Leaders RECORDS view is gone; the books replace it.
+  The footer now runs Home, Standings, Games, Storylines, Records, Scouting, Roster, Desk; in the office the computer
+  opens Storylines and the cabinet the books.
 
 ## Design philosophy (2026-10-03)
 Realistic baseline; the fun is in finding combinations that BREAK it (ratings + abilities + favor +

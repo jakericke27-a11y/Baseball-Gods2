@@ -7,6 +7,7 @@
  * Ratings change only over the winter today, so one snapshot per season is exact. When something changes
  * ratings mid-season (injuries, cards), add snapshots at more dates.
  */
+import { greatGames, leagueSplits, type GameRow, type SplitRow } from './chronicle';
 import { decreeFor } from './decree';
 import { RATING_KEYS } from './development';
 import type { BatLine, PitchLine } from './game/types';
@@ -37,6 +38,10 @@ export interface YearSummary {
   ratings: RatingRow[];
   /** The Gods' decree that year, if any ("The Year of the Mighty Home Run"). */
   decree?: string;
+  /** Every team's highest-Drama games (chronicle.ts). Seasons before step 2.9 don't have them. */
+  games?: GameRow[];
+  /** League-wide batting splits (chronicle.ts). Seasons before step 2.9 don't have them. */
+  splits?: Record<string, SplitRow>;
 }
 
 const rows = <T extends object>(m: Map<number, T>, fields: readonly string[], teamOf: (id: number) => number): LineRow[] =>
@@ -67,6 +72,8 @@ export function summarizeSeason(s: Season): YearSummary {
     postPitching: rows(s.postPitching, PITCH_FIELDS, tOf),
     ratings: [...s.league.players, ...s.league.freeAgents, ...s.league.amateurs].map(ratingRow),
     ...(decreeFor(s.league, s.year) ? { decree: decreeFor(s.league, s.year)!.label } : {}),
+    games: greatGames(s.results),
+    splits: leagueSplits(s.results, s.players),
   };
 }
 

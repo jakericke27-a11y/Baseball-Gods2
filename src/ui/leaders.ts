@@ -1,6 +1,6 @@
 /**
  * Leaderboards for the Leaders screen (step 2.3): one category table that serves this season and all time, the
- * whole league or one of its two leagues, and the records report (single-season and career marks, and who's close).
+ * whole league or one of its two leagues. (Records live in the record books, books.ts.)
  */
 import { BAT_FIELDS, PITCH_FIELDS } from '../engine/history';
 import type { BatLine, PitchLine } from '../engine/game/types';
@@ -110,83 +110,6 @@ export function board(g: Game, cat: Cat, when: When, scope: Scope, count = 10): 
     out.push({ id, value: v, shown: cat.fmt(v) });
   }
   return out.sort((a, b) => (cat.low ? a.value - b.value : b.value - a.value) || a.id - b.id).slice(0, count);
-}
-
-// ---------------------------------------------------------------- records
-
-export interface RecordRow {
-  cat: Cat;
-  /** The mark to beat: best in history. */
-  best?: { id: number; value: number; year?: number };
-  /** Someone within reach of it now, and how close (0–1, 1 = level). */
-  chase?: { id: number; value: number; pace?: number; closeness: number };
-}
-
-/** Single-season records (from completed seasons) and who in this season is on course for one. */
-export function seasonRecords(g: Game, side: 'bat' | 'pit'): RecordRow[] {
-  return memo(g, `srec:${side}`, () => {
-    const cats = side === 'bat' ? BAT : PIT;
-    const best = new Map<string, { id: number; value: number; year: number }>();
-    for (const y of g.league.history) {
-      const games = new Map(y.teams.map((t) => [t.teamId, t.W + t.L]));
-      const rows = side === 'bat' ? y.batting : y.pitching;
-      for (const r of rows) {
-        const l = (side === 'bat' ? lineOf<BatLine>(r, BAT_FIELDS) : lineOf<PitchLine>(r, PITCH_FIELDS)) as BatLine & PitchLine;
-        const G = games.get(r[1]) ?? 162;
-        const q = side === 'bat' ? l.PA >= 3.1 * G && l.AB > 0 : l.outs >= 3 * G;
-        for (const c of cats) {
-          if (c.rate && !q) continue;
-          const v = c.value(l);
-          if (!Number.isFinite(v) || (!c.rate && v <= 0)) continue;
-          const cur = best.get(c.key);
-          if (!cur || (c.low ? v < cur.value : v > cur.value)) best.set(c.key, { id: r[0], value: v, year: y.year });
-        }
-      }
-    }
-    const done = g.day >= g.season.regularDays;
-    return cats.map((c) => {
-      const b = best.get(c.key);
-      const lead = board(g, c, 'season', 'all', 1)[0];
-      let chase: RecordRow['chase'];
-      if (b && lead && !done) {
-        const team = g.season.standings.get(g.teamOf.get(lead.id) ?? 0);
-        const played = team ? team.W + team.L : 0;
-        if (played >= 30) {
-          if (c.rate) {
-            const closeness = c.low ? b.value / Math.max(lead.value, 1e-9) : lead.value / b.value;
-            if (closeness >= 0.97) chase = { id: lead.id, value: lead.value, closeness };
-          } else {
-            const pace = (lead.value * 162) / played;
-            if (pace >= 0.9 * b.value) chase = { id: lead.id, value: lead.value, pace: Math.round(pace), closeness: pace / b.value };
-          }
-        }
-      }
-      return { cat: c, best: b, chase };
-    });
-  });
-}
-
-/** Career records (completed seasons) and the active player closest to each, counting this season. */
-export function careerRecords(g: Game, side: 'bat' | 'pit'): RecordRow[] {
-  return memo(g, `crec:${side}`, () => {
-    const cats = (side === 'bat' ? BAT : PIT).filter((c) => !c.rate);
-    const P = pool(g, 'alltime');
-    const lines = (side === 'bat' ? P.bat : P.pit) as Map<number, BatLine & PitchLine>;
-    const cur = (side === 'bat' ? g.season.batting : g.season.pitching) as Map<number, BatLine & PitchLine>;
-    return cats.map((c) => {
-      let best: RecordRow['best'];
-      for (const [id, l] of lines) { const v = c.value(l); if (v > 0 && (!best || v > best.value)) best = { id, value: v }; }
-      let chase: RecordRow['chase'];
-      if (best) for (const id of g.teamOf.keys()) {
-        if (id === best.id) continue;
-        const v = c.value((lines.get(id) ?? {}) as BatLine & PitchLine) || 0;
-        const now = v + (c.value((cur.get(id) ?? {}) as BatLine & PitchLine) || 0);
-        const closeness = now / best.value;
-        if (closeness >= 0.75 && (!chase || closeness > chase.closeness)) chase = { id, value: now, closeness };
-      }
-      return { cat: c, best, chase };
-    });
-  });
 }
 
 // ---------------------------------------------------------------- percentiles

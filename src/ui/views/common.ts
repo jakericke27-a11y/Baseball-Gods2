@@ -79,8 +79,8 @@ export function banner(top: string, sub: string, compact = false): string {
 }
 
 const NAV: Array<[IconName, string, string]> = [
-  ['temple', 'Home', 'home'], ['pennant', 'Standings', 'standings'], ['ball', 'Games', 'games'], ['crown', 'Leaders', 'leaders'], ['flag', 'Races', 'races'], ['scope', 'Scouting', 'scouting'],
-  ['jersey', 'Roster', 'roster'], ['scroll', 'Game log', 'gamelog'], ['deck', 'Desk: decision cards and missions', 'desk'],
+  ['temple', 'Home', 'home'], ['pennant', 'Standings', 'standings'], ['ball', 'Games', 'games'], ['news', 'Storylines', 'storylines'], ['book', 'Records', 'records'], ['scope', 'Scouting', 'scouting'],
+  ['jersey', 'Roster', 'roster'], ['deck', 'Desk: decision cards and missions', 'desk'],
 ];
 
 export function footer(current: string, actions: string): string {

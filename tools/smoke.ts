@@ -90,10 +90,15 @@ async function main() {
   await click('[data-act="w-box"]');
   ok(app().screen === 'games' && doc.querySelectorAll('.w-boxscore table.stat').length === 4, 'box score shows batting and pitching for both teams');
 
-  for (const to of ['standings', 'games', 'leaders', 'races', 'roster', 'gamelog', 'home']) {
+  for (const to of ['standings', 'games', 'storylines', 'records', 'roster', 'home']) {
     await click(`.nav [data-act="go"][data-to="${to}"]`);
     ok(app().screen === to && doc.querySelector('main'), `screen ${to} renders`);
   }
+  await app().act('go', { to: 'gamelog', index: '0' }); await settle();
+  ok(app().screen === 'storylines' && app().lead.view === 'yours' && doc.querySelectorAll('.log-line').length > 20, 'the old game log opens as YOUR GAMES in the Gazette');
+  await app().act('go', { to: 'leaders' }); await settle();
+  ok(app().screen === 'storylines' && app().lead.view === 'leaders' && doc.querySelector('.paper-name'), 'Leaders is a section of the Gazette');
+  await app().act('go', { to: 'home' }); await settle();
   ok(doc.querySelector('.ticker .hub-back'), 'the dashboard offers the walk back to the clubhouse');
   await click('.ticker-label:not(.hub-back)');
   ok(app().screen === 'news', 'headlines open the news screen');
@@ -117,24 +122,42 @@ async function main() {
 
   await click('[data-act="sim-week"]');
   await click('[data-act="sim-month"]');
-  await click('.nav [data-act="go"][data-to="races"]');
+  await click('.nav [data-act="go"][data-to="storylines"]');
+  await click('[data-act="lead"][data-k="view"][data-v="race"]');
   ok(doc.querySelectorAll('.w-race-0, #w-race-0-t').length && doc.querySelectorAll('[aria-label$="playoff race"] .trow').length >= 10, 'races show both leagues\' playoff race');
   ok(/%/.test(text('#main')) && /M\d+/.test(text('#main')), 'the race has odds and magic numbers');
-  ok(!doc.querySelector('.race-list') && doc.querySelector('.page-fixed'), 'the Races page is the playoff race alone, fitted to the screen');
-  await click('.nav [data-act="go"][data-to="leaders"]');
+  ok(!doc.querySelector('.race-list') && doc.querySelector('.page-fixed'), 'THE RACE is the playoff race alone, fitted to the screen');
+  await click('[data-act="lead"][data-k="view"][data-v="leaders"]');
   ok(doc.querySelectorAll('.cards .lead-list').length >= 10 && doc.querySelector('.lead-list .tchip'), 'Leaders: hitting cards for this year, with team colors');
   await click('[data-act="lead"][data-k="side"][data-v="pit"]');
   ok(doc.querySelector('#w-l-ERA-t') && doc.querySelector('#w-l-K9-t'), 'pitching leaders, ERA through K/9');
   await click('[data-act="lead"][data-k="scope"][data-v="0"]');
   const lgA = [...doc.querySelectorAll('#w-l-SO-t')].length && [...doc.querySelectorAll('.lead-list .ttag')].every((e) => app().game.league.teams.find((t: any) => e.textContent!.includes(String(t.id).padStart(2, '0')) && e.textContent!.endsWith(String(t.id).padStart(2, '0')))?.conference === 0);
   ok(lgA, 'League A only: every leader plays in League A');
-  await click('[data-act="lead"][data-k="view"][data-v="races"]');
+  await click('[data-act="lead"][data-k="view"][data-v="lraces"]');
   ok(doc.querySelectorAll('.race-list li').length >= 3, 'pitching races in League A');
   await click('[data-act="lead"][data-k="view"][data-v="form"]');
   await click('[data-act="form-days"][data-days="7"]');
   ok(app().formDays === 7 && text('#main').includes('LAST 7 DAYS'), 'hot and cold switch to the last 7 days');
-  await click('[data-act="lead"][data-k="view"][data-v="records"]');
-  ok(/Records start once Year 1/.test(text('#main')), 'records wait for Year 1 to finish');
+  await click('[data-act="lead"][data-k="view"][data-v="big"]');
+  ok(doc.querySelectorAll('.big-list li').length >= 10 && doc.querySelector('.big-list .drama-n'), 'BIG GAMES: the season\'s highest-Drama games');
+  await click('[data-act="lead"][data-k="view"][data-v="yours"]');
+  ok(doc.querySelectorAll('.glist').length > 5 && doc.querySelectorAll('.log-line').length > 20, 'YOUR GAMES: the game log, play by play');
+  // the record books, in Year 1: the season so far counts
+  await click('.nav [data-act="go"][data-to="records"]');
+  ok(doc.querySelectorAll('.bcover').length === 3 && doc.querySelectorAll('button.bcover').length === 2, 'Records: three books on the desk, two that open');
+  await click('[data-act="book-open"][data-book="team"]');
+  ok(doc.querySelector('.book') && doc.querySelectorAll('.bk-spread > .bk-page').length === 2 && /Record Book/.test(text('.bk-page')), 'Book 1 opens on its title page and contents');
+  await click('[data-act="book-flip"][data-dir="1"]');
+  ok(doc.querySelector('.bk-leaf.fwd') && text('.bk-spread > .bk-page').includes('Year by Year'), 'a page turns (with the leaf), to the year by year');
+  const bat = [...doc.querySelectorAll('.bk-ribbon')].find((b) => b.textContent === 'BATTING') as HTMLElement;
+  await click(`.bk-ribbon[data-page="${bat.dataset.page}"]`);
+  ok(doc.querySelectorAll('.bk-spread > .bk-page .bk-row:not(.bk-th)').length >= 2 && /Hits/.test(text('.bk-spread')), 'the BATTING ribbon jumps to the franchise hits leaders, counting this season');
+  doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })); await sleep(5);
+  ok(Number(bat.dataset.page) + 2 === app().book.at.team, 'the arrow key turns the page');
+  doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await sleep(5);
+  ok(app().screen === 'records' && !doc.querySelector('.book'), 'Escape closes the book back to the desk');
+  await app().act('go', { to: 'storylines' }); await settle();
   await click('[data-act="lead"][data-k="view"][data-v="leaders"]');
   await click('[data-act="lead"][data-k="scope"][data-v="all"]');
   await click('[data-act="lead"][data-k="side"][data-v="bat"]');
@@ -234,9 +257,17 @@ async function main() {
   await app().act('go', { to: 'leaders' }); await settle();
   await click('[data-act="lead"][data-k="when"][data-v="alltime"]');
   ok(doc.querySelector('#w-l-HR-t') && doc.querySelector('#w-l-AVG-t'), 'all-time leaders from Year 1, rate leaders qualified');
-  await click('[data-act="lead"][data-k="view"][data-v="records"]');
-  ok(doc.querySelectorAll('.rec-t .trow').length === 12 + 8, 'records: 12 single-season and 8 career marks for hitters');
-  await click('[data-act="lead"][data-k="view"][data-v="leaders"]'); await click('[data-act="lead"][data-k="when"][data-v="season"]');
+  await click('[data-act="lead"][data-k="when"][data-v="season"]');
+  await app().act('go', { to: 'records' }); await settle();
+  await click('[data-act="book-open"][data-book="league"]');
+  const champs = [...doc.querySelectorAll('.bk-ribbon')].find((b) => b.textContent === 'HISTORY') as HTMLElement;
+  await click(`.bk-ribbon[data-page="${champs.dataset.page}"]`);
+  ok(/Champions/.test(text('.bk-spread')) && /Y1/.test(text('.bk-spread')), 'Book 2: Year 1\'s champion is in the book');
+  const splits = [...doc.querySelectorAll('.bk-ribbon')].find((b) => b.textContent === 'SPLITS') as HTMLElement;
+  await click(`.bk-ribbon[data-page="${splits.dataset.page}"]`);
+  ok(/vs left-handed pitchers/.test(text('.bk-spread')) && /ALL TIME/.test(text('.bk-spread')), 'league splits at the back of Book 2, this year and all time');
+  ok(app().game.league.history[0].games?.length > 30 && app().game.league.history[0].splits?.all[0] > 100000, 'Year 1 kept its great games and league splits');
+  await click('[data-act="book-close"]');
   await click('.nav [data-act="go"][data-to="scouting"]');
   ok(doc.querySelector('#w-preview-t') && doc.querySelectorAll('.draft-board tr').length > 20 && doc.querySelector('[data-k="t1"]'), 'the scouting hub: the next draft class with 1Y/2Y/4Y trends, and the draft preview');
   await click('.draft-board [data-act="wish"]');

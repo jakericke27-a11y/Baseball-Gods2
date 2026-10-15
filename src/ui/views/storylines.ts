@@ -1,19 +1,25 @@
 /**
- * Leaders: one screen, five views. LEADERS (top ten per category, this season or all time), RACES (the top two,
- * the Triple Crown watch and chases), STREAKS, HOT & COLD and RECORDS. Filters: the whole league or one league,
- * hitting or pitching.
+ * Storylines (step 2.9): the Gazette, one old newspaper with a section for each story of the season. THE RACE (the
+ * playoff race with odds), LEADERS (top ten per category, this season or all time), LEADER RACES (the top two, the
+ * Triple Crown watch and chases), STREAKS, HOT & COLD, BIG GAMES (the season's highest-Drama games) and YOUR GAMES
+ * (your game log, play by play). Filters: the whole league or one league, hitting or pitching. Records live in the
+ * record books (Records).
  */
 import type { App } from '../app';
-import { BAT, careerMin, PIT, board, careerRecords, seasonRecords, type Cat, type RecordRow, type Scope } from '../leaders';
+import { gameDrama } from '../../engine/game/drama';
+import { BAT, careerMin, PIT, board, type Cat, type Scope } from '../leaders';
 import { activeStreaks, crownWatch, FORM_WINDOWS, hotCold, inningsText, leaderRaces, milestoneChases, recordChases, type Form } from '../races';
 import type { Game } from '../state';
 import { heat, last10Tone, streakTone } from '../stats';
 import { LEAGUES, teamName } from '../teams';
+import { dateLabel, shortDate } from '../calendar';
 import { esc, link, teamChip, thead, trow, ttable, win } from './common';
-import { page } from './screens';
+import { playoffRaceWin } from './races';
+import { gameLogBody, page } from './screens';
 
-export type LeadView = 'leaders' | 'races' | 'streaks' | 'form' | 'records';
-export interface LeadState { view: LeadView; scope: 'all' | '0' | '1'; side: 'bat' | 'pit'; when: 'season' | 'alltime' }
+export type Section = 'race' | 'leaders' | 'lraces' | 'streaks' | 'form' | 'big' | 'yours';
+export interface LeadState { view: Section; scope: 'all' | '0' | '1'; side: 'bat' | 'pit'; when: 'season' | 'alltime' }
+export const SECTIONS: Array<[Section, string]> = [['race', 'THE RACE'], ['leaders', 'LEADERS'], ['lraces', 'LEADER RACES'], ['streaks', 'STREAKS'], ['form', 'HOT & COLD'], ['big', 'BIG GAMES'], ['yours', 'YOUR GAMES']];
 
 const who = (g: Game, id: number) => {
   const t = g.teamOf.get(id);
@@ -90,32 +96,34 @@ function formView(app: App, s: LeadState): string {
   return `${days$}<div class="two-col fill">${body}</div>`;
 }
 
-function recordsView(g: Game, s: LeadState): string {
-  const table = (rows: RecordRow[], career: boolean) => {
-    const cols = '56px 76px minmax(0, 1.2fr) minmax(0, 2fr)';
-    const head = thead(['STAT', 'RECORD', 'HELD BY', career ? 'CLOSEST ACTIVE' : 'THIS YEAR']);
-    const body = rows.map((r) => {
-      const holder = r.best ? `${link(g.name(r.best.id), 'player', { id: r.best.id })}${r.best.year ? ` <span class="muted small">Y${r.best.year}</span>` : ''}` : '<span class="muted">—</span>';
-      const chase = r.chase ? `${link(g.name(r.chase.id), 'player', { id: r.chase.id })} <span class="${r.chase.closeness >= 1 ? 'pos' : 'small'}">${r.chase.closeness >= 1 && !r.chase.pace ? 'past it: ' : ''}${r.cat.fmt(r.chase.value)}${r.chase.pace ? `, pace ${r.chase.pace}` : ''}</span>` : '<span class="muted">—</span>';
-      return trow([`<span title="${esc(r.cat.label)}">${esc(r.cat.key)}</span>`, r.best ? r.cat.fmt(r.best.value) : '—', holder, chase], 0, !!r.chase && g.teamOf.get(r.chase.id) === g.userTeam);
-    }).join('');
-    return `<div class="hscroll">${ttable(cols, career ? 'Career records' : 'Single-season records', head + body).replace('class="ttable"', 'class="ttable full rec-t"')}</div>`;
-  };
-  if (!g.league.history.length) return '<p class="note">Records start once Year 1 is in the books: the first season sets every mark.</p>';
-  const ss = seasonRecords(g, s.side), cr = careerRecords(g, s.side);
-  return `<div class="two-col fill">${win({ id: 'w-rec-s', title: 'Single Season', label: 'LEAGUE RECORDS · CLOSE CHASES SHOWN', body: table(ss, false), scroll: true })}
-${win({ id: 'w-rec-c', title: 'Career', label: 'LEAGUE RECORDS · ACTIVE PLAYERS WITHIN 75%', body: table(cr, true), scroll: true })}</div>
-<p class="note muted small">THIS YEAR lists a leader on pace for 90% of a counting record, or within 3% of a rate record (after 30 games). Records count completed seasons.</p>`;
+/** The season's highest-Drama games: the last 30 days and the whole year. Click one for its box score. */
+function bigGames(app: App): string {
+  const g = app.game!;
+  const all = g.season.results.map((r, i) => ({ r, i })).filter((x) => x.r.log).map(({ r, i }) => { const d = gameDrama(r.log!, r.innings); return { r, i, d: d.score, s: d.swing }; });
+  if (!all.length) return '<p class="note">No games yet. The big ones show up here as the season is played.</p>';
+  const list = (rows: typeof all) => `<ol class="lead-list big-list" data-flow>${rows.map((x, n) => {
+    const [a, h] = x.r.teamIds, mine = x.r.teamIds.includes(g.userTeam);
+    const tag = x.r.innings > 9 ? ` <span class="muted small">(${x.r.innings})</span>` : '';
+    const when = `${shortDate(x.r.day)}${x.r.kind === 'post' ? ', postseason' : x.r.kind === 'tiebreak' ? ', Game 163' : ''}${x.r.innings > 9 ? `, ${x.r.innings} innings` : ''}`;
+    return `<li${mine ? ' class="mine"' : ''}><span class="rank">${n + 1}</span><span class="nm"><button type="button" class="link" data-act="go" data-to="games" data-index="${x.i}" data-key="big:${x.i}" title="${esc(when)}: open the box score">${esc(teamName(a))} ${x.r.score[0]}, ${esc(teamName(h))} ${x.r.score[1]}</button>${tag}</span><span class="val drama-n ${x.d >= 78 ? 'd-hot' : x.d >= 55 ? 'd-warm' : 'd-cool'}">${x.d}</span></li>`;
+  }).join('')}</ol>`;
+  const byD = (p: typeof all) => [...p].sort((x, y) => y.d - x.d || y.s - x.s || y.r.day - x.r.day).slice(0, 12);
+  const recent = byD(all.filter((x) => x.r.day > g.day - 30));
+  const mine = byD(all.filter((x) => x.r.teamIds.includes(g.userTeam)));
+  return `<div class="cards flow fill">${win({ id: 'w-big-30', title: 'Last 30 Days', label: 'BY DRAMA', body: list(recent), cls: 'long' })}${win({ id: 'w-big-y', title: `Year ${g.year}`, label: 'THE BIGGEST SO FAR', body: list(byD(all)), cls: 'long' })}${win({ id: 'w-big-me', title: teamName(g.userTeam), label: 'YOUR BIGGEST', body: mine.length ? list(mine) : '<p class="note muted small">No games yet.</p>', cls: 'long' })}</div>
+<p class="note muted small">Drama: how hard a game's win probability swung, 0 to 100. A typical game is about 40.</p>`;
 }
 
-export function leadersView(app: App): string {
+export function storylinesView(app: App): string {
   const g = app.game!, s = app.lead;
   const scope: Scope = s.scope === 'all' ? 'all' : (Number(s.scope) as 0 | 1);
-  const views: Array<[LeadView, string]> = [['leaders', 'LEADERS'], ['races', 'RACES'], ['streaks', 'STREAKS'], ['form', 'HOT & COLD'], ['records', 'RECORDS']];
-  const filters = [
-    tabs('view', s.view, views, 'View'),
-    `<div class="lead-filters">${s.view === 'leaders' || s.view === 'races' ? tabs('scope', s.scope, [['all', 'ALL'], ['0', LEAGUES[0].toUpperCase()], ['1', LEAGUES[1].toUpperCase()]], 'League') : ''}${tabs('side', s.side, [['bat', 'HITTING'], ['pit', 'PITCHING']], 'Side')}${s.view === 'leaders' ? tabs('when', s.when, [['season', `YEAR ${g.year}`], ['alltime', 'ALL TIME']], 'When') : ''}</div>`,
-  ].join('');
-  const body = s.view === 'leaders' ? leadersCards(g, s, scope) : s.view === 'races' ? racesView(g, s, scope) : s.view === 'streaks' ? streaksView(g, s) : s.view === 'form' ? formView(app, s) : recordsView(g, s);
-  return page(app, 'leaders', `<div class="lead-head">${filters}</div>${body}`, true);
+  const sec = SECTIONS.some(([k]) => k === s.view) ? s.view : 'race';
+  const nav = `<nav class="paper-nav" aria-label="Sections">${SECTIONS.map(([k, t]) => `<button type="button" class="paper-sec${sec === k ? ' on' : ''}" data-act="lead" data-k="view" data-v="${k}" data-key="lead:view:${k}" aria-pressed="${sec === k}">${t}</button>`).join('<span class="paper-dot" aria-hidden="true">·</span>')}</nav>`;
+  const filters = sec === 'leaders' || sec === 'lraces' || sec === 'streaks' || sec === 'form'
+    ? `<div class="lead-filters">${sec === 'leaders' || sec === 'lraces' ? tabs('scope', s.scope, [['all', 'ALL'], ['0', LEAGUES[0].toUpperCase()], ['1', LEAGUES[1].toUpperCase()]], 'League') : ''}${tabs('side', s.side, [['bat', 'HITTING'], ['pit', 'PITCHING']], 'Side')}${sec === 'leaders' ? tabs('when', s.when, [['season', `YEAR ${g.year}`], ['alltime', 'ALL TIME']], 'When') : ''}</div>` : '';
+  const body = sec === 'race' ? `<div class="two-col fill race-cols">${[0, 1].map((lg) => playoffRaceWin(g, lg)).join('')}</div><p class="note muted small race-key">M magic number: wins plus rival losses to clinch. E elimination number. DIV and IN: odds from simming the rest of the season. z clinched the division, x clinched a spot, e eliminated.</p>`
+    : sec === 'leaders' ? leadersCards(g, s, scope) : sec === 'lraces' ? racesView(g, s, scope) : sec === 'streaks' ? streaksView(g, s) : sec === 'form' ? formView(app, s)
+    : sec === 'big' ? bigGames(app) : gameLogBody(app);
+  const mast = `<header class="paper-mast"><span class="paper-ear">${esc(dateLabel(g.day))}<br>YEAR ${g.year} · ${esc(teamName(g.userTeam).toUpperCase())} EDITION</span><h1 class="paper-name">The Gazette</h1><span class="paper-ear">ALL THE NEWS THE GODS<br>SEE FIT TO PRINT</span></header>`;
+  return page(app, 'storylines', `<div class="paper fill"><div class="paper-in">${mast}${nav}${filters ? `<div class="lead-head">${filters}</div>` : ''}<div class="paper-body fill sec-${sec}">${body}</div></div></div>`, true);
 }

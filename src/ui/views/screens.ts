@@ -286,11 +286,12 @@ ${win({ id: 'w-fa', title: 'Free Agents', label: room ? 'SIGN TO THE RESERVES' :
 
 // ------------------------------------------------------------------ game log
 
-export function gameLogView(app: App): string {
+/** Your games and the picked game's play-by-play (Storylines: YOUR GAMES). */
+export function gameLogBody(app: App): string {
   const g = app.game!;
   const mine = [...g.season.results.keys()].filter((i) => g.season.results[i].teamIds.includes(g.userTeam)).reverse();
   if (!g.season.results.length) {
-    return page(app, 'gamelog', win({ id: 'w-log-empty', title: 'Game Log', body: '<p class="note">No games yet. The log fills in as the season is played.</p>' }));
+    return '<p class="note">No games yet. The log fills in as the season is played.</p>';
   }
   if (app.logPick < 0 || !g.season.results[app.logPick]) app.logPick = mine[0] ?? g.season.results.length - 1;
   const r = g.season.results[app.logPick];
@@ -317,8 +318,8 @@ export function gameLogView(app: App): string {
   const detail = `<label class="detail-pick"><span class="k">PITCH DETAIL</span><select data-act="set-detail" id="detail-pick"><option value="final"${app.settings.detail === 'final' ? ' selected' : ''}>Summary</option><option value="full"${app.settings.detail === 'full' ? ' selected' : ''}>Full sequences</option><option value="none"${app.settings.detail === 'none' ? ' selected' : ''}>Plays only</option></select></label>`;
   const acts = `<div class="row-actions">${detail}${btn('BOX SCORE', 'go', { icon: 'box', data: { to: 'games', index: app.logPick } })}${btn('REPLAY', 'replay', { icon: 'play', data: { index: app.logPick } })}</div>`;
   const title = `${esc(teamName(r.teamIds[0])).toUpperCase()} ${r.score[0]}, ${esc(teamName(r.teamIds[1])).toUpperCase()} ${r.score[1]}${r.innings > 9 ? ` (${r.innings})` : ''} · ${shortDate(r.day)}`;
-  return page(app, 'gamelog', `<div class="games-layout">${win({ id: 'w-glist', title: 'Your Games', label: `${mine.length} PLAYED`, body: `<ul class="glist-list">${list}</ul>`, scroll: true, cls: 'w-scores' })}
-${win({ id: 'w-pbp', title: 'Game Log', label: title, body: acts + LOG_KEY + pbp, scroll: true, cls: 'w-boxscore' })}</div>`);
+  return `<div class="games-layout fill">${win({ id: 'w-glist', title: 'Your Games', label: `${mine.length} PLAYED`, body: `<ul class="glist-list">${list}</ul>`, scroll: true, cls: 'w-scores' })}
+${win({ id: 'w-pbp', title: 'Game Log', label: title, body: acts + LOG_KEY + pbp, scroll: true, cls: 'w-boxscore' })}</div>`;
 }
 
 // ------------------------------------------------------------------ news
