@@ -224,7 +224,13 @@ async function main() {
   ok(doc.querySelector('[data-to="offseason"]'), 'the headlines screen links back to the winter report');
   // Roster management: tabs, a lineup change, a call-up
   await click('.nav [data-act="go"][data-to="roster"]');
-  ok(doc.querySelectorAll('.tab').length === 3, 'your roster has three tabs');
+  ok(doc.querySelectorAll('[data-act="roster-tab"]').length === 2 && doc.querySelector('#w-lineup-t') && doc.querySelector('#w-rot-t'), 'your roster: one TEAM view with lineup & bench beside rotation & bullpen, plus 26 & RESERVES');
+  await click('[data-act="roster-cols"][data-c="stats"]');
+  ok(doc.querySelector('[data-act="roster-sort"][data-k="avg"]'), 'the STATS tab swaps ratings for stats');
+  await click('[data-act="roster-sort"][data-k="avg"]');
+  ok(!doc.querySelector('[data-act="lineup-move"]:not([disabled])') || doc.querySelector('.row-actions .note'), 'sorting by a stat hides the order arrows');
+  await click('[data-act="roster-sort"][data-k="order"]');
+  await click('[data-act="roster-cols"][data-c="ratings"]');
   const first = app().game.plan.lineup[0].player.id;
   await click('[data-act="lineup-move"][data-i="0"][data-dir="1"]');
   ok(app().game.plan.lineup[1].player.id === first && app().game.team.auto.lineup === false, 'the arrows reorder your lineup and take it off AUTO');
@@ -233,8 +239,8 @@ async function main() {
   const upId = Number(callUp.dataset.id); callUp.value = callUp.options[1].value;
   callUp.dispatchEvent(new w.Event('change', { bubbles: true })); await settle();
   ok(app().game.team.active.includes(upId), 'a call-up from the reserves');
-  await click('[data-act="roster-tab"][data-tab="staff"]');
-  ok(doc.querySelectorAll('select[data-act="pen-role"]').length === app().game.plan.bullpen.length, 'the pitching tab sets bullpen roles');
+  await click('[data-act="roster-tab"][data-tab="lineup"]');
+  ok(doc.querySelectorAll('select[data-act="pen-role"]').length === app().game.plan.bullpen.length, 'the team view sets bullpen roles');
   // History: a veteran's card shows his Year 1 line, this year's, and a career total; Standings list past seasons.
   const vet = app().game.league.players.find((p: any) => p.position !== 'P' && app().game.league.history[0].batting.some((r: number[]) => r[0] === p.id) && app().game.season.batting.get(p.id))!;
   await app().act('player', { id: String(vet.id) }); await settle();

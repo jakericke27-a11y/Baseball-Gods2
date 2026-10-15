@@ -7,7 +7,7 @@ import type { App } from '../app';
 import { LOOP_CUES, STINGERS } from '../audio';
 import { icon } from '../sprites';
 import { avg, era, era2, ip, obp, rate3, slg, whip } from '../stats';
-import { DIVISIONS, LEAGUES, teamColors, teamName } from '../teams';
+import { DIVISIONS, LEAGUES, teamColors, teamFull, teamName } from '../teams';
 import { careerBatting, careerPitching, ratingsIn, total } from '../../engine/history';
 import { banner, btn, esc, r5, thead, trow, ttable } from './common';
 
@@ -50,7 +50,7 @@ export function pickerView(app: App): string {
       const g = gr.get(t.id)!;
       const on = t.id === p.team;
       return `<li><button type="button" class="pick${on ? ' picked' : ''}" data-act="pick-team" data-id="${t.id}" data-key="pick:${t.id}" aria-pressed="${on}">
-<span class="pick-jersey" style="color:${teamColors(t.id).line}">${icon('jersey')}</span><span class="pick-name">${esc(teamName(t.id))}</span>
+<span class="pick-jersey" style="color:${teamColors(t.id).line}">${icon('jersey')}</span><span class="pick-name">${esc(teamFull(t.id))}</span>
 <span class="pick-grades"><span>OFF <b>${g.off}</b></span><span>ROT <b>${g.rot}</b></span><span>PEN <b>${g.pen}</b></span></span></button></li>`;
     }).join('');
     divs.push(`<section class="win" aria-labelledby="pd-${lg}-${dv}"><span class="studs" aria-hidden="true"></span><header class="win-head"><h2 class="win-title" id="pd-${lg}-${dv}">${DIVISIONS[dv]}</h2><span class="win-label">${LEAGUES[lg].toUpperCase()}</span></header><div class="win-body"><ul class="pick-list">${items}</ul></div></section>`);

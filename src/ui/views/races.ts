@@ -4,7 +4,7 @@ import type { App } from '../app';
 import type { Game } from '../state';
 import { heat, pct, recordTone } from '../stats';
 import { oddsText, pctText, playoffPicture } from '../races';
-import { DIVISIONS, LEAGUES, teamName } from '../teams';
+import { DIVISIONS, LEAGUE_NAMES, LEAGUES, teamName } from '../teams';
 import { btn, esc, link, thead, trow, ttable, win } from './common';
 import { page } from './screens';
 
@@ -33,7 +33,7 @@ function playoffRaceWin(g: Game, league: number): string {
   const line = '<div class="playoff-line" role="presentation">PLAYOFF LINE</div>';
   const outRow = out.length ? `<p class="note muted small race-out">Out: ${out.map((t) => link(teamName(t.teamId), 'team', { id: t.teamId })).join(', ')}</p>` : '';
   const body = ttable(cols, `${LEAGUES[league]} playoff race`, head + [...leaders, ...wild].map(me).join('') + line + alive.map(me).join('')).replace('class="ttable"', 'class="ttable race-t"') + outRow;
-  return win({ id: `w-race-${league}`, title: LEAGUES[league], label: 'PLAYOFF RACE', body });
+  return win({ id: `w-race-${league}`, title: LEAGUE_NAMES[league], label: 'PLAYOFF RACE', body });
 }
 
 export function racesView(app: App): string {

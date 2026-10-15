@@ -2,6 +2,7 @@
  * The app: which screen is up, what the player clicked, and keeping the ballpark, music and save
  * in step. Screens are HTML strings (views/); one delegated listener handles every button.
  */
+import { flowColumns } from './flow';
 import { newBoardState, type BoardState } from './views/board';
 import { DRAFT_SPEEDS } from './views/draft';
 import { gameDays } from './views/screens';
@@ -78,7 +79,11 @@ export class App {
   gamesPick = -1;
   logPick = -1;
   rosterTeam = 0;
-  rosterTab: 'lineup' | 'staff' | 'moves' = 'lineup';
+  rosterTab: 'lineup' | 'moves' = 'lineup';
+  rosterCols: 'ratings' | 'stats' = 'ratings';
+  /** Windows folded away (the scouting hub's right column). */
+  folded = new Set<string>();
+  rosterSort: { k: string; desc: boolean } = { k: 'order', desc: false };
   /** The founding draft in progress (no league to play yet). */
   founding: { seed: number; team: number; league: League; draft: DraftState; byHand: boolean } | null = null;
   /** The prospect board's sort and filters (draft night and the scouting hub share them). */
@@ -263,6 +268,7 @@ export class App {
       if (el.dataset.stick === 'bottom' && this.stickLog) el.scrollTop = el.scrollHeight;
       else if (scrolls.has(el.dataset.scroll!)) el.scrollTop = scrolls.get(el.dataset.scroll!)!;
     });
+    flowColumns(this.root);
     this.stickLog = false;
     const focusTarget = focusKey ? this.root.querySelector<HTMLElement>(`[data-key="${CSS.escape(focusKey)}"]`) : null;
     if (focusTarget) focusTarget.focus({ preventScroll: true });
@@ -642,7 +648,8 @@ export class App {
     if (this.game && (act === 'lineup-pos' || act === 'lineup-sub' || act === 'rot-swap' || act === 'pen-role' || act === 'call-up')) {
       const g = this.game, i = Number(el.dataset.i), v = el.value;
       if (!v) return;
-      if (act === 'lineup-pos') g.lineupPos(i, Number(v));
+      if (act === 'lineup-pos' && v.startsWith('sub:')) g.lineupSub(i, Number(v.slice(4)));
+      else if (act === 'lineup-pos') g.lineupPos(i, Number(v));
       else if (act === 'lineup-sub') g.lineupSub(i, Number(v));
       else if (act === 'rot-swap') g.rotationSwap(i, Number(v));
       else if (act === 'pen-role') g.penRole(i, v as 'CL' | 'SU' | 'MR' | 'LR');
@@ -908,6 +915,9 @@ export class App {
       case 'form-days': this.formDays = Number(d.days) as App['formDays']; this.render(); return;
       case 'news': if (g) { this.screen = 'news'; this.render(); } return;
       case 'roster-tab': this.rosterTab = d.tab as App['rosterTab']; this.releaseArmed = 0; this.render(); return;
+      case 'win-fold': { const id = d.id!; if (this.folded.has(id)) this.folded.delete(id); else this.folded.add(id); this.render(); return; }
+      case 'roster-cols': this.rosterCols = d.c as App['rosterCols']; if (!['order', 'name', 'age'].includes(this.rosterSort.k)) this.rosterSort = { k: 'order', desc: false }; this.render(); return;
+      case 'roster-sort': { const s = this.rosterSort; this.rosterSort = s.k === d.k ? { k: d.k!, desc: !s.desc } : { k: d.k!, desc: !['order', 'name', 'b', 't', 'fat'].includes(d.k!) }; this.render(); return; }
       case 'roster-auto': {
         if (!g) return;
         const part = d.part as 'lineup' | 'staff' | 'roster';

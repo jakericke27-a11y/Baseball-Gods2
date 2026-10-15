@@ -324,6 +324,22 @@ New-engine guards: runs vs BaseRuns check, RBI ≤ R, per-team start limits by r
   and saved (snapshot v9). Any move other than saying yes to the bench coach marks the year `movedByHand`, which turns
   off the Year 1 password (it can't replay your moves); save files keep everything. Mid-game the autosave waits for the
   day to finish. Also fixed: on phones the watch screen's windows no longer squeeze down to their title bars.
+- 2026-10-15 — Screens pass 2 (step 2.6). **Desktop first** (your call): the game is built for a laptop or desktop
+  screen; phones are supported only where it costs nothing, until you say otherwise. **MLB names as placeholders**
+  (names only; colors stay): `teamName` is the nickname, `teamFull` city and nickname (page titles, the picker),
+  `LEAGUES` AL/NL with `LEAGUE_NAMES` for titles; ids 1–15 AL, 16–30 NL in East/Central/West fives. Swap before release.
+  **Rows:** every table row (`.trow`) has one fixed height (`--row-h`); fire and ice draw behind the text (outlined in
+  night) instead of padding the row; names 24px, numbers 16px; your row is marked by an inset bar, not an outline.
+  **Leaders** is a fixed screen: windows sit side by side, and a window too tall for the screen hands its overflow to a
+  "(cont.)" copy in the next column (`src/ui/flow.ts`, lists marked `data-flow`), so lists grow sideways; every window
+  on a view matches the tallest. Fire and Ice split into WHO'S HOT and WHO'S COLD. Two big windows side by side share
+  one height and scroll inside (`.two-col.fill`). **Roster:** TEAM (lineup & bench beside rotation & bullpen) and
+  26 & RESERVES; RATINGS / STATS tabs; every column sorts (sorting by anything but # hides the order arrows); AUTO sits in
+  each window's header; the position select also swaps in a bench bat, the SP select a reliever; out of position shows
+  amber. **Scouting hub** fits the screen: the board's table scrolls inside with a sticky header; class tabs sit with the
+  filters so the board lines up with the draft window; the right-hand windows fold (`fold` on `win()`). NOW is OVR
+  everywhere. **Live game:** YOU'RE BATTING / YOU'RE PITCHING on the matchup, each side's team on its person, and ▶ on
+  the batting team's line.
 
 ## Design philosophy (2026-10-03)
 Realistic baseline; the fun is in finding combinations that BREAK it (ratings + abilities + favor +

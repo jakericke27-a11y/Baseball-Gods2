@@ -13,6 +13,8 @@ export interface WinOpts {
   /** Screen this window expands into (shows the expand control). */
   open?: string; openData?: Data;
   cls?: string; scroll?: boolean; style?: string;
+  /** Show a fold button; `folded` hides the body. */
+  fold?: boolean; folded?: boolean;
 }
 
 /** A framed window: silver frame, inner rule in your team color, studs on the corners. */
@@ -20,10 +22,12 @@ export function win(o: WinOpts): string {
   const openBtn = o.open
     ? `<button type="button" class="win-open" data-act="go" data-to="${o.open}"${dataAttrs(o.openData)} data-key="open:${o.id}" title="Open ${esc(o.title)}" aria-label="Open ${esc(o.title)}">${icon('expand', 3)}</button>`
     : '';
-  return `<section class="win ${o.cls ?? ''}" aria-labelledby="${o.id}-t"${o.style ? ` style="${o.style}"` : ''}>
+  const foldBtn = o.fold
+    ? `<button type="button" class="win-fold" data-act="win-fold" data-id="${o.id}" data-key="fold:${o.id}" aria-expanded="${!o.folded}" title="${o.folded ? 'Open' : 'Fold away'}">${o.folded ? '+' : '−'}</button>` : '';
+  return `<section class="win ${o.cls ?? ''}${o.folded ? ' folded' : ''}" aria-labelledby="${o.id}-t"${o.style ? ` style="${o.style}"` : ''}>
 <span class="studs" aria-hidden="true"></span>
-<header class="win-head"><h2 class="win-title" id="${o.id}-t">${esc(o.title)}</h2>${o.label ? `<span class="win-label">${o.label}</span>` : ''}${openBtn}</header>
-<div class="win-body${o.scroll ? ' scroll' : ''}"${o.scroll ? ` data-scroll="${o.id}"` : ''}>${o.body}</div>
+<header class="win-head"><h2 class="win-title" id="${o.id}-t">${esc(o.title)}</h2>${o.label ? `<span class="win-label">${o.label}</span>` : ''}${openBtn}${foldBtn}</header>
+${o.folded ? '' : `<div class="win-body${o.scroll ? ' scroll' : ''}"${o.scroll ? ` data-scroll="${o.id}"` : ''}>${o.body}</div>`}
 </section>`;
 }
 

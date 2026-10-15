@@ -23,7 +23,9 @@ function lineScore(app: App, f: Frame): string {
       return `<td${cur ? ' class="cur"' : ''}>${v}</td>`;
     }).join('');
     const id = r.teamIds[side];
-    return `<tr${id === app.game!.userTeam ? ' class="mine"' : ''}><th scope="row" class="ls-team">${tname(id)}</th>${cells}<td class="ls-gap"></td><td class="rhe">${f.score[side]}</td><td class="rhe">${f.hits[side]}</td><td class="rhe">${f.errors[side]}</td></tr>`;
+    const bat = !final && f.half === side;
+    const cls = [id === app.game!.userTeam ? 'mine' : '', bat ? 'batting' : ''].filter(Boolean).join(' ');
+    return `<tr${cls ? ` class="${cls}"` : ''}><th scope="row" class="ls-team">${bat ? '<span class="bat-mark" title="Batting">▶</span>' : ''}${tname(id)}</th>${cells}<td class="ls-gap"></td><td class="rhe">${f.score[side]}</td><td class="rhe">${f.hits[side]}</td><td class="rhe">${f.errors[side]}</td></tr>`;
   };
   return `<section class="win linescore-win" aria-label="Line score"><span class="studs" aria-hidden="true"></span><div class="ls-scroll"><table class="linescore">${head}${row(0)}${row(1)}</table></div></section>`;
 }
@@ -43,11 +45,14 @@ function matchup(app: App, f: Frame): string {
   const slot = r.lineups[f.half].find((s) => s.player.id === b.id);
   const pos = slot ? POS_ABBR[slot.pos] : b.position;
   const R = b.ratings, Q = p.ratings;
-  const body = `<div class="person"><div class="k">AT BAT</div><div class="person-name">${link(b.name, 'player', { id: b.id })}</div>
+  const mySide = r.teamIds.indexOf(g.userTeam);
+  const tag = mySide < 0 || f.kind === 'final' ? '' : mySide === f.half
+    ? `<div class="side-tag bat">YOU'RE BATTING</div>` : `<div class="side-tag pitch">YOU'RE PITCHING</div>`;
+  const body = `${tag}<div class="person"><div class="k">AT BAT · ${tname(r.teamIds[f.half])}</div><div class="person-name">${link(b.name, 'player', { id: b.id })}</div>
 <div class="person-sub">${pos} · BATS ${b.bats} · ${ab ? rate3(h / ab) : '.000'} · ${hr} HR</div><div class="person-sub">${esc(f.today)}</div>
 ${chips({ POW: r5(R.power), CON: r5(R.contact), EYE: r5(R.discipline), SPD: r5(R.speed) })}</div>
 <div class="divider" aria-hidden="true"></div>
-<div class="person"><div class="k">ON THE MOUND</div><div class="person-name">${link(p.name, 'player', { id: p.id })}</div>
+<div class="person"><div class="k">ON THE MOUND · ${tname(r.teamIds[1 - f.half])}</div><div class="person-name">${link(p.name, 'player', { id: p.id })}</div>
 <div class="person-sub">${p.throws === 'R' ? 'RHP' : 'LHP'} · ${f.pitcherPitches} PITCHES · ${before && before.outs ? era2(era(before)) : '—'} ERA</div>
 ${chips({ VEL: r5(Q.velocity), CTL: r5(Q.control), MOV: r5(Q.movement), STA: r5(Q.stamina) })}</div>`;
   return win({ id: 'w-matchup', title: 'Matchup', label: 'RATINGS TO THE NEAREST 5', body, cls: 'w-matchup', scroll: true });

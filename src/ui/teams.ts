@@ -1,7 +1,24 @@
-/** Placeholder team identities: names and colors. Your team's colors dress the whole interface. */
-export const LEAGUES = ['League A', 'League B'];
+/**
+ * Placeholder team identities: names and colors. Your team's colors dress the whole interface.
+ * The names are MLB's, for testing only (swap them before any release); ids 1–15 are the AL, 16–30 the NL,
+ * five to a division in the engine's order (East, Central, West).
+ */
+export const LEAGUES = ['AL', 'NL'];
+export const LEAGUE_NAMES = ['American League', 'National League'];
 export const DIVISIONS = ['East', 'Central', 'West'];
-export const teamName = (id: number) => `Team ${String(id).padStart(2, '0')}`;
+const CLUBS: Array<[city: string, name: string]> = [
+  ['New York', 'Yankees'], ['Boston', 'Red Sox'], ['Toronto', 'Blue Jays'], ['Tampa Bay', 'Rays'], ['Baltimore', 'Orioles'],
+  ['Cleveland', 'Guardians'], ['Minnesota', 'Twins'], ['Detroit', 'Tigers'], ['Kansas City', 'Royals'], ['Chicago', 'White Sox'],
+  ['Houston', 'Astros'], ['Texas', 'Rangers'], ['Seattle', 'Mariners'], ['Los Angeles', 'Angels'], ['Oakland', 'Athletics'],
+  ['Atlanta', 'Braves'], ['Philadelphia', 'Phillies'], ['New York', 'Mets'], ['Miami', 'Marlins'], ['Washington', 'Nationals'],
+  ['Milwaukee', 'Brewers'], ['Chicago', 'Cubs'], ['St. Louis', 'Cardinals'], ['Cincinnati', 'Reds'], ['Pittsburgh', 'Pirates'],
+  ['Los Angeles', 'Dodgers'], ['San Diego', 'Padres'], ['San Francisco', 'Giants'], ['Arizona', 'Diamondbacks'], ['Colorado', 'Rockies'],
+];
+const club = (id: number) => CLUBS[(Math.max(1, id) - 1) % CLUBS.length];
+/** The short name used everywhere: "Yankees". */
+export const teamName = (id: number) => club(id)[1];
+/** City and name, for page titles and the team picker: "New York Yankees". */
+export const teamFull = (id: number) => club(id).join(' ');
 
 /** [team color, action color] for teams 1–30. */
 const PAIRS: Array<[string, string]> = [

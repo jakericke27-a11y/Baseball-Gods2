@@ -28,6 +28,7 @@
   --l-xs: 16px; --l-s: 16px; --l-m: 16px; --l-l: 24px;
   --d-s: 16px; --d-m: 24px; --d-l: 24px; --d-xl: 32px; --d-xxl: 48px;
   --t-win: 24px;
+  --row-h: 44px;
 }
 :root.readable {
   --f-title: 'Atkinson Hyperlegible', Arial, sans-serif;
@@ -117,12 +118,15 @@ svg.px { display: block; flex-shrink: 0; }
 .thead > :not(:first-child) { border-left-color: transparent; }
 .pos { color: var(--good); }
 .neg { color: var(--bad); }
-.trow { position: relative; margin: 0 2px; padding: 6px 12px; border-bottom: 4px solid var(--rule); font: var(--d-m)/1 var(--f-data); }
+.trow { position: relative; box-sizing: border-box; height: var(--row-h); margin: 0 2px; padding: 0 12px; border: 4px solid transparent; border-bottom-color: var(--rule); font: var(--d-m)/1 var(--f-data); }
+.trow > * { position: relative; z-index: 1; }
 .trow > :first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.trow .link { font: var(--l-m)/1.1 var(--f-label); }
-.trow.hot { margin: 4px 2px; padding-bottom: calc(4px + var(--strip-h)); border: 4px solid var(--fire); }
-.trow.cold { margin: 4px 2px; padding-top: calc(4px + var(--strip-h)); border: 4px solid var(--ice); }
-.trow.hot::after, .trow.cold::after { content: ''; position: absolute; left: 0; right: 0; height: var(--strip-h); background-image: var(--strip); background-repeat: repeat-x; background-size: 48px calc(var(--strip-h) * 2); image-rendering: pixelated; pointer-events: none; animation: flicker 0.6s steps(1) infinite; }
+.trow .link { font: var(--l-l)/1.1 var(--f-label); }
+/* fire and ice sit behind the text, inside a row of fixed height, so every row lines up; the text keeps a dark outline */
+.trow.hot { border-color: var(--fire); }
+.trow.cold { border-color: var(--ice); }
+.trow.hot > *, .trow.cold > * { text-shadow: 2px 0 0 var(--night), -2px 0 0 var(--night), 0 2px 0 var(--night), 0 -2px 0 var(--night); }
+.trow.hot::after, .trow.cold::after { content: ''; position: absolute; z-index: 0; left: 0; right: 0; height: var(--strip-h); background-image: var(--strip); background-repeat: repeat-x; background-size: 48px calc(var(--strip-h) * 2); image-rendering: pixelated; pointer-events: none; opacity: 0.9; animation: flicker 0.6s steps(1) infinite; }
 .trow.hot::after { bottom: 0; }
 .trow.cold::after { top: 0; animation-duration: 1.6s; }
 @keyframes flicker { 0% { background-position: 0 0; } 50% { background-position: 0 calc(var(--strip-h) * -1); } }
@@ -138,7 +142,8 @@ svg.px { display: block; flex-shrink: 0; }
 @keyframes fx-shards { from { transform: translateY(0); opacity: 1; } to { transform: translateY(24px); opacity: 0; } }
 @keyframes fx-out-edge { from { box-shadow: inset 0 0 0 4px var(--fire); } to { box-shadow: inset 0 0 0 4px transparent; } }
 @keyframes fx-thaw-edge { from { box-shadow: inset 0 0 0 4px var(--ice); } to { box-shadow: inset 0 0 0 4px transparent; } }
-.trow.mine { background: var(--hi); outline: 4px solid var(--frame); outline-offset: 2px; }
+.trow.mine { background: var(--hi); box-shadow: inset 8px 0 0 var(--frame); }
+.trow.mine > :first-child { padding-left: 10px; }
 .playoff-line { margin: 0 2px 4px; padding: 6px 0 4px; border-bottom: 4px dashed var(--bad); font: var(--l-xs)/1 var(--f-label); letter-spacing: 3px; color: var(--bad); text-align: center; }
 
 /* ---------------------------------------------------------------- buttons */
@@ -295,13 +300,33 @@ table.linescore.small { font-size: var(--d-m); }
   .page-fixed .fill { align-items: stretch; }
   .page-fixed .fill > .win { min-height: 0; max-height: none; overflow: hidden; }
   .page-fixed .fill > .win > .win-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+  .roster-fill:has(> .w-lineup) { grid-template-columns: minmax(0, 53fr) minmax(0, 47fr); gap: 16px; }
   .roster-fill { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 24px; }
   .roster-fill:has(> .row-actions) { grid-template-rows: auto minmax(0, 1fr); }
   .roster-fill > .row-actions { grid-column: 1 / -1; }
   .roster-side { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 24px; padding-right: 4px; }
   .roster-side > .win { flex-shrink: 0; }
   .race-cols { gap: 24px; }
-  .page-fixed .race-t .trow:not(.hot):not(.cold) { padding-top: 3px; padding-bottom: 3px; }
+  /* the scouting hub: the board fills the left, its table scrolls inside; the right column scrolls on its own */
+  .page-fixed .scout-layout.fill { align-items: stretch; grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); min-height: 0; }
+  .page-fixed .scout-main { min-height: 0; }
+  .page-fixed .scout-main > .w-board { flex: 1 1 auto; min-height: 0; }
+  .page-fixed .w-board > .win-body { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+  .page-fixed .w-board .board-scroll { flex: 1 1 auto; max-height: none; min-height: 0; }
+  .page-fixed .scout-side { min-height: 0; overflow-y: auto; padding-right: 4px; }
+  .page-fixed .scout-side > .win { flex-shrink: 0; }
+  /* Leaders, races and streaks: the screen stays put and lists flow into new columns (scroll sideways for more) */
+  .page-fixed .flow { display: flex; gap: 26px; align-items: flex-start; overflow-x: auto; overflow-y: hidden; padding-bottom: 6px; }
+  .page-fixed .flow > .win { flex: 0 0 max(300px, calc((100% - 78px) / 4)); max-height: 100%; }
+  .page-fixed .flow > .win { padding-top: 10px; padding-bottom: 8px; }
+  .page-fixed .flow .lead-list li { padding-top: 1px; padding-bottom: 1px; border-bottom-width: 2px; line-height: 24px; }
+  .page-fixed .flow .lead-list .val { font-size: 16px; }
+  .page-fixed .flow .trow { --row-h: 40px; }
+  :root:not(.readable) .page-fixed .flow .trow .link { font-size: 16px; }
+  /* two big windows side by side share one height, and scroll inside */
+  .page-fixed .two-col.fill { align-items: stretch; grid-auto-rows: minmax(0, 1fr); }
+  .page-fixed .two-col.fill > .win { min-height: 0; overflow: hidden; }
+  .page-fixed .two-col.fill > .win > .win-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
 }
 
 /* ---------------------------------------------------------------- leaders filters and the roster bar */
@@ -321,6 +346,17 @@ table.linescore.small { font-size: var(--d-m); }
 .bsel { display: flex; flex-direction: column; gap: 2px; }
 .bsel select { min-height: 40px; padding: 2px 6px; background: var(--solid); color: var(--text); border: 4px solid var(--rule); font: var(--d-s)/1 var(--f-data); }
 .board-scroll { max-height: 70vh; overflow: auto; }
+.board-top { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 14px; margin-bottom: 10px; }
+.board-top .board-filters { margin: 0; }
+.board-class { margin: 0 !important; }
+.draft-board th[scope="row"] { max-width: 280px; }
+.win-fold { flex-shrink: 0; align-self: center; width: 30px; height: 30px; margin-left: 8px; padding: 0; background: transparent; border: 3px solid var(--rule); color: var(--muted); font: 600 20px/1 var(--f-label); cursor: pointer; }
+.win-fold:hover { color: #FFFFFF; border-color: var(--frame); }
+.win.folded { padding-bottom: 6px; }
+.draft-board th[scope="row"] .link { font-size: 24px; }
+.draft-board tr > * { height: 30px; }
+.draft-board tr:first-child th { position: sticky; top: 0; z-index: 2; background: rgb(var(--tint)); }
+.wish-list, .w-myprospects .lead-list { max-height: 46vh; overflow-y: auto; }
 .draft-board .sort { padding: 0; background: none; border: 0; color: var(--muted); font: inherit; letter-spacing: 1px; cursor: pointer; white-space: nowrap; }
 .draft-board .sort.on, .draft-board .sort:hover { color: var(--text); }
 .draft-board tr.wish { background: rgba(255, 210, 90, 0.12); }
@@ -359,8 +395,8 @@ table.linescore.small { font-size: var(--d-m); }
 .ttag.small { font-size: var(--d-s); }
 
 /* ---------------------------------------------------------------- the dashboard reads at one size */
-.dash .trow, .dash .pen-row, .dash .prob, .dash .yt-race, .dash .yt-last, .dash .note, .dash .lead-name, .dash .lead-val, .dash .kv .v, .dash .yt-place { font-size: 16px; }
-.dash .trow .link, .dash .pen-name .link, .dash .prob .link { font-size: 16px; }
+.dash .pen-row, .dash .prob, .dash .yt-race, .dash .yt-last, .dash .note, .dash .lead-name, .dash .lead-val, .dash .kv .v, .dash .yt-place { font-size: 16px; }
+.dash .pen-name .link, .dash .prob .link { font-size: 16px; }
 
 /* ---------------------------------------------------------------- the Gods' decree */
 .decree { display: grid; grid-template-columns: 24px minmax(0, 1fr) 24px; margin: 0 0 26px; box-shadow: 8px 8px 0 var(--drop); transform-origin: center; animation: unfurl 0.9s steps(6) 1 both; }
@@ -565,7 +601,9 @@ input[type="file"] { font: var(--d-s)/1.2 var(--f-data); }
 :root:not(.readable) .chip .k, :root:not(.readable) .rbar .k, :root:not(.readable) .lights .k { font-size: 16px; }
 :root:not(.readable) .win-label { letter-spacing: 1px; }
 /* Dense tables and lists stay at 16px; everything else reads at 24px. */
-:root:not(.readable) .ttable.full .trow, :root:not(.readable) .league-col .trow, :root:not(.readable) .lead-list li,
+:root:not(.readable) .trow { font-size: 16px; }
+:root:not(.readable) .ttable.full .trow .link { font-size: 16px; }
+:root:not(.readable) .lead-list li,
 :root:not(.readable) .glist, :root:not(.readable) table.stat { font-size: 16px; }
 :root:not(.readable) .pw { width: 17ch; letter-spacing: 1px; }
 
@@ -649,3 +687,46 @@ table.stat.roster td.acts .btn { min-height: 36px; padding: 4px 10px; }
   .w-mgr .win-head { flex-wrap: wrap; gap: 6px; }
   .w-mgr .win-title { white-space: normal; }
 }
+
+/* ---------------------------------------------------------------- roster: one view, sortable, ruled */
+.tab-gap { width: 24px; }
+table.stat.roster th, table.stat.roster td { text-align: center; padding: 4px 5px; border-bottom-width: 2px; }
+table.stat.roster th[scope="row"] { max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+table.stat.roster .fbar i { width: 4px; }
+table.stat.roster .fbar { gap: 1px; }
+table.stat.roster td + td, table.stat.roster th + td, table.stat.roster td + th, table.stat.roster th + th { border-left: 2px solid var(--rule); }
+table.stat.roster th[scope="row"], table.stat.roster th.l { text-align: left; }
+table.stat.roster td:first-child { text-align: center; }
+table.stat.roster button.sort { background: none; border: 0; padding: 2px 0; color: inherit; font: inherit; letter-spacing: inherit; cursor: pointer; white-space: nowrap; }
+table.stat.roster button.sort:hover, table.stat.roster button.sort.on { color: var(--text); }
+table.stat.roster tr.sect th { padding: 10px 8px 4px; text-align: left; border-left: 0; color: var(--gold); font: var(--l-xs)/1 var(--f-label); letter-spacing: 3px; border-bottom: 2px solid var(--gold); }
+table.stat.roster select.swap { width: 52px; max-width: 52px; padding: 2px 4px; text-align: center; }
+:root:not(.readable) table.stat.roster { font-size: 16px; }
+:root:not(.readable) table.stat.roster th[scope="row"] { font-size: 24px; line-height: 1; }
+table.stat.roster td.offpos select { border-color: var(--warn); color: var(--warn); }
+table.stat.roster td.ud { padding: 2px 4px; }
+table.stat.roster td.ud .btn-icon { min-height: 0; height: 12px; width: 26px; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: none; border-width: 2px; vertical-align: middle; }
+table.stat.roster td.ud .btn-icon svg { width: 12px; height: auto; }
+table.stat.roster td.ud .btn-icon + .btn-icon { margin-top: 1px; }
+table.stat.roster td.ud .btn-icon svg { width: 10px; }
+table.stat.roster tr:not(.sect) > * { height: 28px; padding-top: 1px; padding-bottom: 1px; }
+table.stat.roster select { min-height: 24px; height: 24px; padding: 0 4px; border-width: 2px; }
+table.stat.roster tr.sect th { padding: 6px 8px 2px; }
+.win-label .auto-btn { min-height: 0; padding: 4px 8px; border-width: 3px; box-shadow: none; font-size: 16px; }
+.win-label .sorted-note { margin-right: 10px; color: var(--warn); }
+.w-lineup .win-label, .w-rotpen .win-label { display: flex; align-items: center; letter-spacing: 1px; }
+:root:not(.readable) table.stat.roster tr:first-child th { font-size: 16px; }
+:root:not(.readable) table.stat.roster select { font-size: 16px; }
+:root:not(.readable) table.stat.roster .fbar { vertical-align: middle; }
+table.stat.roster select[data-act="lineup-pos"], table.stat.roster select[data-act="pen-role"] { width: 62px; }
+table.stat.roster select[data-act="rot-swap"] { width: 70px; }
+table.stat.roster td { padding-left: 3px; padding-right: 3px; }
+table.stat.roster th[scope="row"] { max-width: 184px; }
+table.stat.roster tr:first-child th { padding-left: 3px; padding-right: 3px; }
+
+/* live game: whose turn it is */
+.side-tag { margin: 0 0 10px; padding: 6px 10px; font: 600 var(--l-m)/1 var(--f-label); letter-spacing: 3px; text-align: center; border: 4px solid; }
+.side-tag.bat { color: var(--gold); border-color: var(--gold); background: rgba(255, 210, 90, 0.14); }
+.side-tag.pitch { color: var(--ice); border-color: var(--ice); background: rgba(143, 216, 247, 0.14); }
+.linescore tr.batting .ls-team { color: #FFFFFF; }
+.bat-mark { margin-right: 6px; color: var(--gold); }

@@ -29,14 +29,14 @@ function leadersCards(g: Game, s: LeadState, scope: Scope): string {
   const card = (c: Cat) => {
     const rows = board(g, c, s.when, scope, 10);
     if (!rows.length) return '';
-    const body = `<ol class="lead-list">${rows.map((l, i) => `<li${mineCls(g, l.id)}><span class="rank">${i + 1}</span><span class="nm">${who(g, l.id)}</span><span class="val">${l.shown}</span></li>`).join('')}</ol>`;
+    const body = `<ol class="lead-list" data-flow>${rows.map((l, i) => `<li${mineCls(g, l.id)}><span class="rank">${i + 1}</span><span class="nm">${who(g, l.id)}</span><span class="val">${l.shown}</span></li>`).join('')}</ol>`;
     return win({ id: `w-l-${c.key}`, title: c.key, label: c.label.toUpperCase(), body });
   };
   const cards = cats.map(card).join('');
   const note = s.when === 'alltime'
     ? `<p class="note muted small">All time counts completed seasons; this year joins once it ends. Rate leaders need ${s.side === 'bat' ? `${careerMin(g.league.history.length).PA} plate appearances` : `${careerMin(g.league.history.length).outs / 3} innings`}.</p>`
     : '';
-  return cards ? `${note}<div class="cards">${cards}</div>` : `<p class="note">${s.when === 'alltime' ? 'No completed seasons yet. All-time leaders start after Year 1.' : 'No leaders yet. Play a few games.'}</p>`;
+  return cards ? `${note}<div class="cards flow fill">${cards}</div>` : `<p class="note">${s.when === 'alltime' ? 'No completed seasons yet. All-time leaders start after Year 1.' : 'No leaders yet. Play a few games.'}</p>`;
 }
 
 function racesView(g: Game, s: LeadState, scope: Scope): string {
@@ -47,46 +47,47 @@ function racesView(g: Game, s: LeadState, scope: Scope): string {
     const lines = r.top.slice(0, 2).map((t, i) => `<div class="rl-p"${mineCls(g, t.id)}><span class="rank">${i + 1}</span><span class="nm">${who(g, t.id)}</span><span class="val">${t.shown}</span></div>`).join('');
     return `<li class="${close ? 'close' : ''}"><div class="rl-h"><span class="k">${esc(r.label.toUpperCase())}</span>${close ? '<span class="tag">CLOSE</span>' : ''}</div>${lines}<div class="rl-f muted small">${esc(facts)}</div></li>`;
   }).join('');
-  const out = [items ? win({ id: 'w-lraces', title: 'Leader Races', label: 'TOP TWO', body: `<ul class="race-list">${items}</ul>` }) : ''];
+  const out = [items ? win({ id: 'w-lraces', title: 'Leader Races', label: 'TOP TWO', cls: 'long', body: `<ul class="race-list" data-flow>${items}</ul>` }) : ''];
   const name = (k: string) => ({ AVG: 'average', HR: 'homers', RBI: 'RBI', W: 'wins', SO: 'strikeouts', ERA: 'ERA' })[k] ?? k;
   const crown = crownWatch(g).filter((x) => x.pitching === pitching);
-  if (crown.length) out.push(win({ id: 'w-crown', title: 'Triple Crown', label: 'WATCH', body: `<ul class="chase-list">${crown.map((x) => `<li${mineCls(g, x.playerId)}>${who(g, x.playerId)}<span class="small">${x.leads.length === 3 ? 'Leads all three' : `Leads ${x.leads.map(name).join(' and ')}; ${x.chasing.map((c) => `${c.behind} back in ${name(c.cat)}`).join(', ')}`}</span></li>`).join('')}</ul>` }));
+  if (crown.length) out.push(win({ id: 'w-crown', title: 'Triple Crown', label: 'WATCH', body: `<ul class="chase-list" data-flow>${crown.map((x) => `<li${mineCls(g, x.playerId)}>${who(g, x.playerId)}<span class="small">${x.leads.length === 3 ? 'Leads all three' : `Leads ${x.leads.map(name).join(' and ')}; ${x.chasing.map((c) => `${c.behind} back in ${name(c.cat)}`).join(', ')}`}</span></li>`).join('')}</ul>` }));
   const pitchKeys = new Set(['W', 'SO', 'SV', 'ERA']);
   const rc = recordChases(g).filter((c) => pitchKeys.has(c.key) === pitching);
   const ms = milestoneChases(g).filter((c) => pitchKeys.has(c.key) === pitching).slice(0, 8);
-  const list = (cs: typeof ms) => `<ul class="chase-list">${cs.map((c) => `<li${mineCls(g, c.playerId)}>${who(g, c.playerId)}<span class="small">${esc(c.text)}</span></li>`).join('')}</ul>`;
-  if (rc.length || ms.length) out.push(win({ id: 'w-chases', title: 'Chases', label: 'RECORDS AND MILESTONES', body: `${rc.length ? `<h3 class="sub-h">RECORD PACE</h3>${list(rc)}` : ''}${ms.length ? `<h3 class="sub-h">CAREER MILESTONES</h3>${list(ms)}` : ''}` }));
+  const list = (cs: typeof ms) => `<ul class="chase-list" data-flow>${cs.map((c) => `<li${mineCls(g, c.playerId)}>${who(g, c.playerId)}<span class="small">${esc(c.text)}</span></li>`).join('')}</ul>`;
+  if (rc.length || ms.length) out.push(win({ id: 'w-chases', title: 'Chases', label: 'RECORDS AND MILESTONES', cls: 'long', body: `${rc.length ? `<h3 class="sub-h">RECORD PACE</h3>${list(rc)}` : ''}${ms.length ? `<h3 class="sub-h">CAREER MILESTONES</h3>${list(ms)}` : ''}` }));
   const body = out.filter(Boolean).join('');
-  return body ? `<div class="cards">${body}</div>` : '<p class="note">No races yet. Leaders need a few games to qualify.</p>';
+  return body ? `<div class="cards flow fill">${body}</div>` : '<p class="note">No races yet. Leaders need a few games to qualify.</p>';
 }
 
 function streaksView(g: Game, s: LeadState): string {
   const st = activeStreaks(g);
   const list = (id: string, title: string, rows: Array<[number, number]>, shown: (v: number) => string, best: [number, number]) => {
     if (!rows.length && !best[0]) return '';
-    const body = `${rows.length ? `<ol class="lead-list">${rows.map(([pid, v], i) => `<li${mineCls(g, pid)}><span class="rank">${i + 1}</span><span class="nm">${who(g, pid)}</span><span class="val">${shown(v)}</span></li>`).join('')}</ol>` : ''}${best[0] ? `<p class="note muted small">Year's best: ${esc(g.name(best[1]))}, ${shown(best[0])}</p>` : ''}`;
-    return win({ id, title, label: 'ACTIVE', body });
+    const body = `${rows.length ? `<ol class="lead-list" data-flow>${rows.map(([pid, v], i) => `<li${mineCls(g, pid)}><span class="rank">${i + 1}</span><span class="nm">${who(g, pid)}</span><span class="val">${shown(v)}</span></li>`).join('')}</ol>` : ''}${best[0] ? `<p class="note muted small">Year's best: ${esc(g.name(best[1]))}, ${shown(best[0])}</p>` : ''}`;
+    return win({ id, title, label: 'ACTIVE', body, cls: 'long' });
   };
   const games = (v: number) => `${v} G`, inn = (v: number) => `${inningsText(v)} IP`;
   const players = s.side === 'bat'
     ? list('w-st-hit', 'Hitting Streaks', st.hit, games, st.best.hit) + list('w-st-ob', 'On-Base Streaks', st.onBase, games, st.best.onBase)
     : list('w-st-zero', 'Scoreless Streaks', st.scoreless, inn, st.best.scoreless);
   const teams = g.league.teams.map((t) => g.season.standings.get(t.id)!).filter((r) => heat(r) !== 0).sort((a, b) => b.streak - a.streak);
-  const fire = teams.length ? win({ id: 'w-fire', title: 'Fire and Ice', label: 'TEAMS', body: ttable('minmax(0, 1fr) 52px 52px', 'Team streaks', thead(['TEAM', 'STK', 'L10']) + teams.map((r) => trow([link(teamName(r.teamId), 'team', { id: r.teamId }), streakTone(r), last10Tone(r)], heat(r), r.teamId === g.userTeam)).join('')) }) : '';
+  const teamWin = (id: string, title: string, rows: typeof teams) => rows.length ? win({ id, title, label: 'TEAMS', cls: 'long', body: ttable('minmax(0, 1fr) 52px 52px', title, thead(['TEAM', 'STK', 'L10']) + rows.map((r) => trow([link(teamName(r.teamId), 'team', { id: r.teamId }), streakTone(r), last10Tone(r)], heat(r), r.teamId === g.userTeam)).join('')).replace('class="ttable"', 'class="ttable" data-flow') }) : '';
+  const fire = teamWin('w-hot', "Who's Hot", teams.filter((r) => heat(r) > 0)) + teamWin('w-cold', "Who's Cold", teams.filter((r) => heat(r) < 0).reverse());
   const all = players + fire;
-  return all ? `<div class="cards">${all}</div>` : '<p class="note">No streaks worth watching yet.</p>';
+  return all ? `<div class="cards flow fill">${all}</div>` : '<p class="note">No streaks worth watching yet.</p>';
 }
 
 function formView(app: App, s: LeadState): string {
   const g = app.game!, days = app.formDays, f = hotCold(g, days);
   const win2 = (id: string, title: string, rows: Form[], stat: string) => win({
-    id, title, label: `LAST ${days} DAYS`,
+    id, title, label: `LAST ${days} DAYS`, scroll: true,
     body: rows.length ? `<ol class="lead-list form-list">${rows.map((r, i) => `<li${mineCls(g, r.id)}><span class="rank">${i + 1}</span><span class="nm">${who(g, r.id)}<span class="muted small"> ${esc(r.line)} · season ${r.season}</span></span><span class="val">${r.shown}</span></li>`).join('')}</ol>` : `<p class="note muted small">Not enough ${stat} yet.</p>`,
   });
   const days$ = `<div class="tabs small-tabs" role="group" aria-label="Window">${FORM_WINDOWS.map((d) => `<button type="button" class="tab${d === days ? ' on' : ''}" data-act="form-days" data-days="${d}" data-key="form-days:${d}" aria-pressed="${d === days}">LAST ${d}</button>`).join('')}</div>`;
   const body = s.side === 'bat' ? win2('w-hot-b', 'Hot Bats · OPS', f.hotBats, 'at-bats') + win2('w-cold-b', 'Cold Bats · OPS', f.coldBats, 'at-bats')
     : win2('w-hot-p', 'Hot Arms · ERA', f.hotArms, 'innings') + win2('w-cold-p', 'Cold Arms · ERA', f.coldArms, 'innings');
-  return `${days$}<div class="cards">${body}</div>`;
+  return `${days$}<div class="two-col fill">${body}</div>`;
 }
 
 function recordsView(g: Game, s: LeadState): string {
@@ -102,8 +103,8 @@ function recordsView(g: Game, s: LeadState): string {
   };
   if (!g.league.history.length) return '<p class="note">Records start once Year 1 is in the books: the first season sets every mark.</p>';
   const ss = seasonRecords(g, s.side), cr = careerRecords(g, s.side);
-  return `<div class="two-col">${win({ id: 'w-rec-s', title: 'Single Season', label: 'LEAGUE RECORDS · CLOSE CHASES SHOWN', body: table(ss, false) })}
-${win({ id: 'w-rec-c', title: 'Career', label: 'LEAGUE RECORDS · ACTIVE PLAYERS WITHIN 75%', body: table(cr, true) })}</div>
+  return `<div class="two-col fill">${win({ id: 'w-rec-s', title: 'Single Season', label: 'LEAGUE RECORDS · CLOSE CHASES SHOWN', body: table(ss, false), scroll: true })}
+${win({ id: 'w-rec-c', title: 'Career', label: 'LEAGUE RECORDS · ACTIVE PLAYERS WITHIN 75%', body: table(cr, true), scroll: true })}</div>
 <p class="note muted small">THIS YEAR lists a leader on pace for 90% of a counting record, or within 3% of a rate record (after 30 games). Records count completed seasons.</p>`;
 }
 
@@ -116,5 +117,5 @@ export function leadersView(app: App): string {
     `<div class="lead-filters">${s.view === 'leaders' || s.view === 'races' ? tabs('scope', s.scope, [['all', 'ALL'], ['0', LEAGUES[0].toUpperCase()], ['1', LEAGUES[1].toUpperCase()]], 'League') : ''}${tabs('side', s.side, [['bat', 'HITTING'], ['pit', 'PITCHING']], 'Side')}${s.view === 'leaders' ? tabs('when', s.when, [['season', `YEAR ${g.year}`], ['alltime', 'ALL TIME']], 'When') : ''}</div>`,
   ].join('');
   const body = s.view === 'leaders' ? leadersCards(g, s, scope) : s.view === 'races' ? racesView(g, s, scope) : s.view === 'streaks' ? streaksView(g, s) : s.view === 'form' ? formView(app, s) : recordsView(g, s);
-  return page(app, 'leaders', `<div class="lead-head">${filters}</div>${body}`);
+  return page(app, 'leaders', `<div class="lead-head">${filters}</div>${body}`, true);
 }

@@ -11,7 +11,7 @@ import { dateLabel, shortDate } from '../calendar';
 import type { Game } from '../state';
 import { BAT_CATS, LOG_KEY, PIT_CATS, diffTone, last10Tone, playTone, recordTone, streakTone, avg, era, era2, gbText, heat, ip, last10, leaders, obp, pct, races, rate3, slg, streakText, whip } from '../stats';
 import { bracketHtml, findSeries, FINAL_NAME, seriesShort } from '../post';
-import { DIVISIONS, LEAGUES, teamName } from '../teams';
+import { DIVISIONS, LEAGUE_NAMES, LEAGUES, teamFull, teamName } from '../teams';
 import { bannerFor, simActions } from './home';
 import { btn, esc, footer, link, r5, thead, trow, ttable, win, tname } from './common';
 
@@ -45,7 +45,7 @@ export function standingsView(app: App): string {
     const seeds = race.divisions.map((d) => d.rows[0]).sort((a, b) => pct(b) - pct(a));
     const picture = [...seeds.map((r, i) => `<li><span class="seed">${i + 1}</span>${link(teamName(r.teamId), 'team', { id: r.teamId })} <span class="muted">${r.W}-${r.L} · ${DIVISIONS[race.divisions.find((d) => d.rows[0] === r)!.division]}</span></li>`),
       ...race.wildCard.slice(0, 2).map((w, i) => `<li><span class="seed">${i + 4}</span>${link(teamName(w.row.teamId), 'team', { id: w.row.teamId })} <span class="muted">${w.row.W}-${w.row.L} · Wild card</span></li>`)].join('');
-    return `<div class="league-col"><h2 class="page-h">${LEAGUES[race.league]}</h2>
+    return `<div class="league-col"><h2 class="page-h">${LEAGUE_NAMES[race.league]}</h2>
 ${g.season.post?.seeds.length ? '' : win({ id: `w-pic-${race.league}`, title: 'Playoff Picture', label: 'IF IT ENDED TODAY', body: `<ol class="seeds">${picture}</ol>` })}
 ${divs}${win({ id: `w-wc-${race.league}`, title: 'Wild Card', label: LEAGUES[race.league].toUpperCase(), body: ttable(cols2, 'Wild card race', thead(['TEAM', 'W', 'L', 'PCT', 'GB', 'L10', 'STK']) + wc) })}</div>`;
   }).join('');
@@ -175,46 +175,74 @@ export function rosterView(app: App): string {
   const active = new Set(activeOf(team));
   const players = team.playerIds.map((id) => g.players.get(id)!);
   const auto = team.auto ?? { lineup: true, staff: true, roster: true };
-  const tab = mine ? app.rosterTab : app.rosterTab === 'moves' ? 'lineup' : app.rosterTab;
+  const tab = mine ? app.rosterTab : 'lineup';
   const sel = `<label class="team-select"><span class="k">TEAM</span><select data-act="roster-team" id="roster-team">${g.league.teams.map((t) => `<option value="${t.id}"${t.id === teamId ? ' selected' : ''}>${esc(teamName(t.id))}${t.id === g.userTeam ? ' (you)' : ''}</option>`).join('')}</select></label>`;
-  const tabs = [['lineup', 'LINEUP'], ['staff', 'PITCHING'], ...(mine ? [['moves', '26 & RESERVES']] : [])]
-    .map(([k, label]) => `<button type="button" class="tab${tab === k ? ' on' : ''}" data-act="roster-tab" data-tab="${k}" data-key="roster-tab:${k}" aria-pressed="${tab === k}">${label}</button>`).join('');
+  const tabs = [['lineup', 'TEAM'], ...(mine ? [['moves', '26 & RESERVES']] : [])]
+    .map(([k, label]) => `<button type="button" class="tab${tab === k ? ' on' : ''}" data-act="roster-tab" data-tab="${k}" data-key="roster-tab:${k}" aria-pressed="${tab === k}">${label}</button>`).join('')
+    + (tab !== 'moves' ? `<span class="tab-gap"></span>${(['ratings', 'stats'] as const).map((k) => `<button type="button" class="tab${app.rosterCols === k ? ' on' : ''}" data-act="roster-cols" data-c="${k}" data-key="roster-cols:${k}" aria-pressed="${app.rosterCols === k}">${k.toUpperCase()}</button>`).join('')}` : '');
   const autoBtn = (part: 'lineup' | 'staff' | 'roster') => mine
     ? `<button type="button" class="btn btn-ghost auto-btn${auto[part] ? ' on' : ''}" data-act="roster-auto" data-part="${part}" data-key="roster-auto:${part}" aria-pressed="${auto[part]}" title="${auto[part] ? 'The AI runs this. Change anything to take over.' : 'You run this. Turn AUTO on to hand it back to the AI.'}"><span>AUTO ${auto[part] ? 'ON' : 'OFF'}</span></button>` : '';
   const tbl = (head: string, rows: string, label: string) => `<div class="hscroll"><table class="stat roster" aria-label="${label}">${head}${rows}</table></div>`;
-  const batStats = (p: (typeof players)[0]) => {
-    const l = g.season.batting.get(p.id), R = p.ratings;
-    return `<td>${p.bats}</td><td>${p.age}</td><td>${r5(R.power)}</td><td>${r5(R.contact)}</td><td>${r5(R.discipline)}</td><td>${r5(R.speed)}</td><td>${r5(R.instincts)}</td><td>${r5(R.glove)}</td><td>${r5(R.cannon)}</td>
-<td>${l ? rate3(avg(l)) : '—'}</td><td>${l ? rate3(obp(l)) : '—'}</td><td>${l ? rate3(slg(l)) : '—'}</td><td>${l?.HR ?? 0}</td><td>${l?.RBI ?? 0}</td>`;
-  };
-  const batCols = '<th scope="col">B</th><th scope="col">AGE</th><th scope="col">POW</th><th scope="col">CON</th><th scope="col">EYE</th><th scope="col">SPD</th><th scope="col">RNG</th><th scope="col">GLV</th><th scope="col">ARM</th><th scope="col">AVG</th><th scope="col">OBP</th><th scope="col">SLG</th><th scope="col">HR</th><th scope="col">RBI</th>';
-  const armStats = (p: (typeof players)[0], starter: boolean) => {
-    const l = g.season.pitching.get(p.id), R = p.ratings;
-    return `<td>${p.throws}</td><td>${p.age}</td><td>${r5(R.velocity)}</td><td>${r5(R.control)}</td><td>${r5(R.movement)}</td><td>${r5(R.stamina)}</td><td>${fatigueBar(recoveredFatigue(g.season, p.id))}</td>
-<td>${l ? `${l.W}-${l.L}` : '0-0'}</td><td>${l ? era2(era(l)) : '—'}</td><td>${l ? ip(l.outs) : '0.0'}</td><td>${l?.K ?? 0}</td><td>${starter ? (l?.GS ?? 0) : (l?.SV ?? 0)}</td>`;
-  };
-  const armCols = (last: string) => `<th scope="col">T</th><th scope="col">AGE</th><th scope="col">VEL</th><th scope="col">CTL</th><th scope="col">MOV</th><th scope="col">STA</th><th scope="col">FATIGUE</th><th scope="col">W-L</th><th scope="col">ERA</th><th scope="col">IP</th><th scope="col">SO</th><th scope="col">${last}</th>`;
   const name = (p: (typeof players)[0]) => `<th scope="row">${link(p.name, 'player', { id: p.id })}</th>`;
-  const updown = (act: string, i: number, n: number) => mine
-    ? `<td class="ud">${btn('', act, { icon: 'left', data: { i, dir: -1 }, disabled: i === 0, title: 'Move up', cls: 'btn-icon btn-ghost up' })}${btn('', act, { icon: 'right', data: { i, dir: 1 }, disabled: i === n - 1, title: 'Move down', cls: 'btn-icon btn-ghost down' })}</td>` : '';
+  const updown = (act: string, i: number, n: number, on: boolean) => mine
+    ? `<td class="ud">${on ? `${btn('', act, { icon: 'left', data: { i, dir: -1 }, disabled: i === 0, title: 'Move up', cls: 'btn-icon btn-ghost up' })}${btn('', act, { icon: 'right', data: { i, dir: 1 }, disabled: i === n - 1, title: 'Move down', cls: 'btn-icon btn-ghost down' })}` : ''}</td>` : '';
   let body = '';
-  if (tab === 'lineup') {
+  if (tab !== 'moves') {
+    // One view: lineup and bench on the left, rotation and bullpen on the right. RATINGS or STATS; every column sorts.
+    type P = (typeof players)[0];
+    type Col = { k: string; h: string; v: (p: P) => number | string; cell?: (p: P) => string };
+    const B = (p: P) => g.season.batting.get(p.id), A = (p: P) => g.season.pitching.get(p.id);
+    const num = (x: number | undefined, f = (n: number) => String(n)) => (x === undefined || !Number.isFinite(x) ? '—' : f(x));
+    const ratings = app.rosterCols === 'ratings';
+    const batCols: Col[] = ratings
+      ? [{ k: 'b', h: 'B', v: (p) => p.bats }, { k: 'age', h: 'AGE', v: (p) => p.age }, ...([['power', 'POW'], ['contact', 'CON'], ['discipline', 'EYE'], ['speed', 'SPD'], ['instincts', 'RNG'], ['glove', 'GLV'], ['cannon', 'ARM']] as const)
+        .map(([r, h]): Col => ({ k: r, h, v: (p) => r5(p.ratings[r]) }))]
+      : [{ k: 'pa', h: 'PA', v: (p) => B(p)?.PA ?? 0 }, { k: 'avg', h: 'AVG', v: (p) => (B(p)?.AB ? avg(B(p)!) : -1), cell: (p) => (B(p)?.AB ? rate3(avg(B(p)!)) : '—') },
+        { k: 'obp', h: 'OBP', v: (p) => (B(p)?.PA ? obp(B(p)!) : -1), cell: (p) => (B(p)?.PA ? rate3(obp(B(p)!)) : '—') }, { k: 'slg', h: 'SLG', v: (p) => (B(p)?.AB ? slg(B(p)!) : -1), cell: (p) => (B(p)?.AB ? rate3(slg(B(p)!)) : '—') },
+        { k: 'hr', h: 'HR', v: (p) => B(p)?.HR ?? 0 }, { k: 'rbi', h: 'RBI', v: (p) => B(p)?.RBI ?? 0 }, { k: 'sb', h: 'SB', v: (p) => B(p)?.SB ?? 0 }];
+    const armCols: Col[] = ratings
+      ? [{ k: 't', h: 'T', v: (p) => p.throws }, { k: 'age', h: 'AGE', v: (p) => p.age }, ...([['velocity', 'VEL'], ['control', 'CTL'], ['movement', 'MOV'], ['stamina', 'STA']] as const)
+        .map(([r, h]): Col => ({ k: r, h, v: (p) => r5(p.ratings[r]) })), { k: 'fat', h: 'TIRED', v: (p) => recoveredFatigue(g.season, p.id), cell: (p) => fatigueBar(recoveredFatigue(g.season, p.id)) }]
+      : [{ k: 'wl', h: 'W-L', v: (p) => (A(p)?.W ?? 0) - (A(p)?.L ?? 0), cell: (p) => `${A(p)?.W ?? 0}-${A(p)?.L ?? 0}` }, { k: 'era', h: 'ERA', v: (p) => (A(p)?.outs ? -era(A(p)!) : -99), cell: (p) => (A(p)?.outs ? era2(era(A(p)!)) : '—') },
+        { k: 'ip', h: 'IP', v: (p) => A(p)?.outs ?? 0, cell: (p) => ip(A(p)?.outs ?? 0) }, { k: 'so', h: 'SO', v: (p) => A(p)?.K ?? 0 },
+        { k: 'whip', h: 'WHIP', v: (p) => (A(p)?.outs ? -whip(A(p)!) : -99), cell: (p) => (A(p)?.outs ? whip(A(p)!).toFixed(2) : '—') }, { k: 'gs', h: 'GS', v: (p) => A(p)?.GS ?? 0 }, { k: 'sv', h: 'SV', v: (p) => A(p)?.SV ?? 0 }];
+    void num;
+    const sort = app.rosterSort;
+    const sorted = <T,>(rows: T[], pick: (r: T) => P, cols: Col[]): T[] => {
+      const c = cols.find((x) => x.k === sort.k) ?? (sort.k === 'name' ? { k: 'name', h: '', v: (p: P) => p.name } : null);
+      if (!c) return rows;
+      return [...rows].sort((x, y) => { const a = c.v(pick(x)), b = c.v(pick(y)); const d = typeof a === 'string' ? a.localeCompare(String(b)) : a - (b as number); return sort.desc ? -d : d; });
+    };
+    const ordered = (cols: Col[]) => !cols.some((c) => c.k === sort.k) && sort.k !== 'name';
+    const sh = (k: string, h: string, left = false) => `<th scope="col"${left ? ' class="l"' : ''}><button type="button" class="sort${sort.k === k ? ' on' : ''}" data-act="roster-sort" data-k="${k}" data-key="roster-sort:${k}">${h}${sort.k === k ? (sort.desc ? ' ▾' : ' ▴') : ''}</button></th>`;
+    const cells = (p: P, cols: Col[]) => cols.map((c) => `<td>${c.cell ? c.cell(p) : c.v(p)}</td>`).join('');
+    const sect = (label: string, n: number) => `<tr class="sect"><th colspan="${n}" scope="colgroup">${label}</th></tr>`;
+    // lineup and bench
     const bench = players.filter((p) => p.position !== 'P' && active.has(p.id) && !plan.lineup.some((l) => l.player.id === p.id));
-    const posSel = (i: number, pos: number) => `<select data-act="lineup-pos" data-i="${i}" aria-label="Position">${[2, 3, 4, 5, 6, 7, 8, 9, 0].map((n) => `<option value="${n}"${n === pos ? ' selected' : ''}>${POS_ABBR[n]}</option>`).join('')}</select>`;
-    const subSel = (i: number) => bench.length ? `<select data-act="lineup-sub" data-i="${i}" aria-label="Bring in from the bench"><option value="">BENCH…</option>${bench.map((p) => `<option value="${p.id}">${esc(p.name)} (${p.position})</option>`).join('')}</select>` : '';
-    const rows = plan.lineup.map((l, i) => `<tr><td>${i + 1}</td>${updown('lineup-move', i, plan.lineup.length)}${name(l.player)}<td>${mine ? posSel(i, l.pos) : POS_ABBR[l.pos]}</td><td>${l.player.position}</td>${batStats(l.player)}${mine ? `<td>${subSel(i)}</td>` : ''}</tr>`).join('');
-    const head = `<tr><th scope="col">#</th>${mine ? '<th scope="col"></th>' : ''}<th scope="col">NAME</th><th scope="col">PLAYS</th><th scope="col">POS</th>${batCols}${mine ? '<th scope="col">SWAP IN</th>' : ''}</tr>`;
-    const benchRows = bench.map((p) => `<tr><td></td>${mine ? '<td></td>' : ''}${name(p)}<td>—</td><td>${p.position}</td>${batStats(p)}${mine ? '<td></td>' : ''}</tr>`).join('');
-    body = win({ id: 'w-lineup', title: 'Lineup', label: 'BATTING ORDER', body: `${mine ? `<div class="row-actions">${autoBtn('lineup')}<span class="note small muted">Order with the arrows; pick each spot's position; swap a bench bat into any spot.</span></div>` : ''}${tbl(head, rows, 'Lineup')}` })
-      + win({ id: 'w-bench', title: 'Bench', label: 'ACTIVE, NOT STARTING', body: tbl(head, benchRows, 'Bench') });
-  } else if (tab === 'staff') {
-    const rotSel = (i: number) => `<select data-act="rot-swap" data-i="${i}" aria-label="Swap with a reliever"><option value="">FROM THE PEN…</option>${plan.bullpen.map((a) => `<option value="${a.player.id}">${esc(a.player.name)} (${a.role})</option>`).join('')}</select>`;
+    const byOrder = ordered(batCols);
+    // one select per spot: his position today, or a bench bat to swap in
+    const posSel = (i: number, pos: number) => `<select data-act="lineup-pos" data-i="${i}" aria-label="Position, or swap in a bench bat">${[2, 3, 4, 5, 6, 7, 8, 9, 0].map((n) => `<option value="${n}"${n === pos ? ' selected' : ''}>${POS_ABBR[n]}</option>`).join('')}${bench.length ? `<optgroup label="SWAP IN">${bench.map((p) => `<option value="sub:${p.id}">${esc(p.name)} (${p.position})</option>`).join('')}</optgroup>` : ''}</select>`;
+    const lineup = sorted(plan.lineup.map((l, i) => ({ l, i })), (x) => x.l.player, batCols);
+    const bCount = 3 + (mine ? 1 : 0) + batCols.length;
+    // POS: where he plays today; out of position shows in amber, with his own position on hover
+    const playsCell = (i: number, pos: number, p: P) => {
+      const off = POS_ABBR[pos] !== p.position && !(pos === 0 && p.position === 'DH');
+      return `<td${off ? ` class="offpos" title="Plays ${POS_ABBR[pos]}; his position is ${p.position}"` : ''}>${mine ? posSel(i, pos) : POS_ABBR[pos]}</td>`;
+    };
+    const bHead = `<tr>${sh('order', '#')}${mine ? '<th scope="col"></th>' : ''}${sh('name', 'NAME', true)}<th scope="col">POS</th>${batCols.map((c) => sh(c.k, c.h)).join('')}</tr>`;
+    const lRows = lineup.map(({ l, i }) => `<tr><td>${i + 1}</td>${updown('lineup-move', i, plan.lineup.length, byOrder)}${name(l.player)}${playsCell(i, l.pos, l.player)}${cells(l.player, batCols)}</tr>`).join('');
+    const bRows = sorted(bench, (p) => p, batCols).map((p) => `<tr><td></td>${mine ? '<td></td>' : ''}${name(p)}<td>${p.position}</td>${cells(p, batCols)}</tr>`).join('');
+    // rotation and bullpen
+    const byRot = ordered(armCols);
+    const rotSel = (i: number) => `<select data-act="rot-swap" data-i="${i}" aria-label="Starter ${i + 1}, or swap in a reliever"><option value="">SP${i + 1}</option><optgroup label="SWAP IN">${plan.bullpen.map((a) => `<option value="${a.player.id}">${esc(a.player.name)} (${a.role})</option>`).join('')}</optgroup></select>`;
     const roleSel = (i: number, role: string) => `<select data-act="pen-role" data-i="${i}" aria-label="Role">${['CL', 'SU', 'MR', 'LR'].map((r) => `<option value="${r}"${r === role ? ' selected' : ''}>${r}</option>`).join('')}</select>`;
-    const rot = plan.rotation.map((p, i) => `<tr><td>${i + 1}</td>${updown('rot-move', i, plan.rotation.length)}${name(p)}${armStats(p, true)}${mine ? `<td>${rotSel(i)}</td>` : ''}</tr>`).join('');
-    const pen = plan.bullpen.map((a, i) => `<tr><td>${mine ? roleSel(i, a.role) : a.role}</td>${mine ? '<td></td>' : ''}${name(a.player)}${armStats(a.player, false)}${mine ? '<td></td>' : ''}</tr>`).join('');
-    const head = (last: string, lead: string) => `<tr><th scope="col">${lead}</th>${mine ? '<th scope="col"></th>' : ''}<th scope="col">NAME</th>${armCols(last)}${mine ? '<th scope="col">SWAP</th>' : ''}</tr>`;
-    body = win({ id: 'w-rot', title: 'Rotation', label: `${team.strategy.rotationSize}-MAN · FATIGUE AS OF TODAY`, body: `${mine ? `<div class="row-actions">${autoBtn('staff')}<span class="note small muted">Order the rotation; swap a reliever into a start; set bullpen roles.</span></div>` : ''}${tbl(head('GS', '#'), rot, 'Rotation')}` })
-      + win({ id: 'w-pen', title: 'Bullpen', label: 'CL CLOSER · SU SETUP · LR LONG · MR MIDDLE', body: tbl(head('SV', 'ROLE'), pen, 'Bullpen') });
+    const aCount = 2 + (mine ? 1 : 0) + armCols.length;
+    const aHead = `<tr>${sh('order', 'ROLE')}${mine ? '<th scope="col"></th>' : ''}${sh('name', 'NAME', true)}${armCols.map((c) => sh(c.k, c.h)).join('')}</tr>`;
+    const rot = sorted(plan.rotation.map((p, i) => ({ p, i })), (x) => x.p, armCols).map(({ p, i }) => `<tr><td>${mine ? rotSel(i) : `SP${i + 1}`}</td>${updown('rot-move', i, plan.rotation.length, byRot)}${name(p)}${cells(p, armCols)}</tr>`).join('');
+    const pen = sorted(plan.bullpen.map((a, i) => ({ a, i })), (x) => x.a.player, armCols).map(({ a, i }) => `<tr><td>${mine ? roleSel(i, a.role) : a.role}</td>${mine ? '<td></td>' : ''}${name(a.player)}${cells(a.player, armCols)}</tr>`).join('');
+    const sorted$ = (on: boolean) => (on ? '' : '<span class="sorted-note" title="Click # to put the order back and reorder">SORTED · # TO REORDER</span>');
+    body = win({ id: 'w-lineup', title: 'Lineup & Bench', label: `${sorted$(byOrder)}${autoBtn('lineup')}`, scroll: true, cls: 'w-lineup', body: tbl(bHead, sect('LINEUP', bCount) + lRows + sect('BENCH', bCount) + bRows, 'Lineup and bench') })
+      + win({ id: 'w-rot', title: 'Rotation & Bullpen', label: `${sorted$(byRot)}${autoBtn('staff')}`, scroll: true, cls: 'w-rotpen', body: tbl(aHead, sect('ROTATION', aCount) + rot + sect('BULLPEN', aCount) + pen, 'Rotation and bullpen') });
   } else {
     const left = movesLeft(team, g.day);
     const opt = (p: (typeof players)[0]) => (p.optionedThisYear ? `<span class="muted">option used · ${Math.max(0, optionsLeft(p) - 1)} after</span>` : optionsLeft(p) > 0 ? `${optionsLeft(p)} left` : '<span class="warn">OUT · waivers</span>');
@@ -223,7 +251,7 @@ export function rosterView(app: App): string {
       : btn('RELEASE', 'release-arm', { data: { id: p.id } });
     const onWaivers = new Set(g.league.waivers.map((w) => w.playerId));
     const line = (p: (typeof players)[0], extra: string) => `<tr>${name(p)}<td>${p.position === 'P' ? p.pitcherRole : p.position}</td><td>${p.age}</td><td>${Math.round(playerValue(p))}</td><td>${opt(p)}</td><td class="acts">${extra}</td></tr>`;
-    const head = (k: string) => `<tr><th scope="col">${k}</th><th scope="col">POS</th><th scope="col">AGE</th><th scope="col">NOW</th><th scope="col">OPTIONS</th><th scope="col"></th></tr>`;
+    const head = (k: string) => `<tr><th scope="col">${k}</th><th scope="col">POS</th><th scope="col">AGE</th><th scope="col">OVR</th><th scope="col">OPTIONS</th><th scope="col"></th></tr>`;
     const group = (pitchers: boolean, inActive: boolean) => players.filter((p) => (p.position === 'P') === pitchers && active.has(p.id) === inActive).sort((a, b) => playerValue(b) - playerValue(a));
     const callSel = (p: (typeof players)[0]) => onWaivers.has(p.id) ? '<span class="muted">on waivers</span>'
       : `<select data-act="call-up" data-id="${p.id}" aria-label="Call up for"${left <= 0 ? ' disabled' : ''}><option value="">CALL UP FOR…</option>${group(p.position === 'P', true).map((q) => `<option value="${q.id}">${esc(q.name)} (${q.position === 'P' ? q.pitcherRole : q.position}${canOption(q) ? '' : ', to waivers'})</option>`).join('')}</select>`;
@@ -250,7 +278,7 @@ ${win({ id: 'w-waive', title: 'Waiver Wire', label: `${g.league.waivers.length} 
 ${win({ id: 'w-fa', title: 'Free Agents', label: room ? 'SIGN TO THE RESERVES' : 'YOUR 40 IS FULL', body: tbl(head('FREE AGENT'), fas, 'Free agents') })}</div>`;
   }
   const rs = g.season.standings.get(teamId)!;
-  return page(app, 'roster', `<div class="roster-head"><div><h2 class="page-h">${esc(teamName(teamId))}</h2><p class="page-sub">${rs.W}-${rs.L} · ${LEAGUES[team.conference]} ${DIVISIONS[team.division]} · ${team.strategy.rotationSize}-man rotation</p></div><div class="tabs" role="group" aria-label="Roster views">${tabs}</div>${sel}</div>
+  return page(app, 'roster', `<div class="roster-head"><div><h2 class="page-h">${esc(teamFull(teamId))}</h2><p class="page-sub">${rs.W}-${rs.L} · ${LEAGUES[team.conference]} ${DIVISIONS[team.division]} · ${team.strategy.rotationSize}-man rotation</p></div><div class="tabs" role="group" aria-label="Roster views">${tabs}</div>${sel}</div>
 <div class="fill roster-fill">${body}</div>`, true);
 }
 
