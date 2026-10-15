@@ -45,3 +45,20 @@ describe('manager calls and alignments', () => {
     expect(day.call!.calls.pitch[mine]).toBeNull();
   });
 });
+
+import { gameDrama, winProb } from '../src/engine/game/drama';
+describe('the Drama index', () => {
+  it('win probability reads sensibly and a game ends decided', () => {
+    expect(winProb(9, 1, 0, 0, 0)).toBeGreaterThan(0.6);
+    expect(winProb(9, 0, 0, 0, 3)).toBeGreaterThan(0.9);
+    expect(winProb(1, 1, 0, 0, -4)).toBeLessThan(0.3);
+    const s = season();
+    for (const r of s.results.slice(0, 40)) {
+      const d = gameDrama(r.log!, r.innings);
+      expect(d.score).toBeGreaterThanOrEqual(0); expect(d.score).toBeLessThanOrEqual(100);
+      const home = r.score[1] > r.score[0];
+      expect(Math.abs(d.curve.at(-1)! - (home ? 1 : 0))).toBeLessThan(0.02);
+      expect(gameDrama(r.log!, r.innings).score).toBe(d.score);
+    }
+  });
+});

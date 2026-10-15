@@ -81,6 +81,7 @@ async function main() {
   ok(doc.querySelectorAll('.ab-detail .ab-pitches li').length > 0, 'a play in the log opens its at-bat, pitch by pitch');
   guard = 0;
   while (app().watch.live && guard++ < 200) { await click('[data-act="w-end"]'); await answer(); }
+  if (!text('.call').startsWith('Final') && doc.querySelector('[data-act="w-end"]')) await click('[data-act="w-end"]'); // the game ended on a play: step to the final
   ok(!app().game.live && text('.call').startsWith('Final'), `to the end, answering when asked: "${text('.call')}"`);
   ok(!app().game.movedByHand && app().password() !== '', 'a live game where you only said yes to the bench coach keeps the Year 1 password');
   const r = app().watch.replay.result;
@@ -103,8 +104,9 @@ async function main() {
   await sleep(5);
   ok(!doc.querySelector('.modal'), 'Escape closes the card');
   await click('[data-act="settings"]');
-  const pw = (q('[data-password-field]') as HTMLInputElement).value;
-  ok(/^[0-9A-Z]{5}-[0-9A-Z]{5}$/.test(pw), `password shown: ${pw}`);
+  const pwField = doc.querySelector<HTMLInputElement>('[data-password-field]');
+  const pw = pwField?.value ?? '';
+  ok(app().game.movedByHand ? !pwField : /^[0-9A-Z]{5}-[0-9A-Z]{5}$/.test(pw), app().game.movedByHand ? 'no password once a card has changed the year' : `password shown: ${pw}`);
   const readable = q('#set-readable') as HTMLInputElement;
   readable.checked = true; readable.dispatchEvent(new w.Event('change', { bubbles: true }));
   await sleep(5);
@@ -156,16 +158,21 @@ async function main() {
   const before = JSON.stringify([...app().game.season.standings.values()].map((x: any) => [x.teamId, x.W, x.L, x.RS, x.RA]));
   const hl = app().game.headlines.length;
   const save = app().saveData();
-  await app().load(save); await settle();
-  const after = JSON.stringify([...app().game.season.standings.values()].map((x: any) => [x.teamId, x.W, x.L, x.RS, x.RA]));
-  ok(before === after && app().game.headlines.length === hl, 'loading the save replays the year identically');
+  if (app().game.movedByHand) {
+    // decision cards changed ratings: the password (a replay of the year) can't reproduce that, so it isn't offered
+    ok(app().password() === '', 'cards changed the year, so the replay password is no longer offered (save files keep everything)');
+  } else {
+    await app().load(save); await settle();
+    const after = JSON.stringify([...app().game.season.standings.values()].map((x: any) => [x.teamId, x.W, x.L, x.RS, x.RA]));
+    ok(before === after && app().game.headlines.length === hl, 'loading the save replays the year identically');
+  }
   await app().whenSaved();
   // A headless DOM has no database, so the autosave falls back to the replay save (full saves are checked in Chromium).
   const stored = JSON.parse(w.localStorage.getItem('baseball-gods/save') ?? 'null');
   ok(stored && stored.day === save.day && stored.team === 20 && app().storage === 'none', 'browser save written (replay fallback without a database)');
 
   await click('[data-act="settings"]');
-  ok((q('[data-password-field]') as HTMLInputElement).value === pw.replace(/./g, (c) => c) || true, 'settings reopen');
+  ok(doc.querySelector('.modal'), 'settings reopen');
   await click('[data-act="close"]');
   app().screen = 'title'; app().titleStage = 'menu'; app().render();
   await click('[data-act="password-open"]');
@@ -220,6 +227,7 @@ async function main() {
   ok(app().game.movedByHand, 'a move of your own marks the year (no password replay)');
   guard2 = 0;
   while (app().watch.live && guard2++ < 200) { await click('[data-act="w-end"]'); await answer2(); }
+  if (!doc.querySelector('[data-act="w-box"]') && doc.querySelector('[data-act="w-end"]')) await click('[data-act="w-end"]');
   ok(app().game.season.results[app().watch.index].subs?.some((x: any) => x.incoming === ph), 'the box score remembers the pinch hitter');
   await click('[data-act="w-box"]');
   ok([...doc.querySelectorAll('.box-sub')].some((e) => e.textContent!.includes('PH')), 'the box lists him under the man he batted for');
@@ -238,6 +246,16 @@ async function main() {
   await app().act('go', { to: 'home' }); await settle();
   await click('[data-act="news"]');
   ok(doc.querySelector('[data-to="offseason"]'), 'the headlines screen links back to the winter report');
+  // Decision cards: a week sim stops when one lands; LATER keeps simming; the desk answers it
+  await app().act('go', { to: 'home' }); await settle();
+  let wk = 0;
+  while (!doc.querySelector('.modal.landed') && wk++ < 8 && !app().game.over) await click('[data-act="sim-week"]');
+  ok(doc.querySelector('.modal.landed'), 'a decision card lands and the sim stops with the desk pop-up');
+  await click('[data-act="landed-go"]');
+  ok(app().screen === 'desk' && doc.querySelector('.dcard'), 'GO TO DESK opens the desk with the card');
+  const logBefore = app().game.cards.log.length;
+  await click('.dcard [data-act="dc-answer"]');
+  ok(app().game.cards.log.length === logBefore + 1, 'answering a card logs the decision and what came of it');
   // Roster management: tabs, a lineup change, a call-up
   await click('.nav [data-act="go"][data-to="roster"]');
   ok(doc.querySelectorAll('[data-act="roster-tab"]').length === 2 && doc.querySelector('#w-lineup-t') && doc.querySelector('#w-rot-t'), 'your roster: one TEAM view with lineup & bench beside rotation & bullpen, plus 26 & RESERVES');

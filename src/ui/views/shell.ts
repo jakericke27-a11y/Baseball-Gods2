@@ -8,6 +8,7 @@ import { LOOP_CUES, STINGERS } from '../audio';
 import { icon } from '../sprites';
 import { avg, era, era2, ip, obp, rate3, slg, whip } from '../stats';
 import { baseballCard, compareCards } from './card';
+import { landedModal } from './desk';
 import { DIVISIONS, LEAGUES, teamColors, teamFull, teamName } from '../teams';
 import { careerBatting, careerPitching, ratingsIn, total } from '../../engine/history';
 import { banner, btn, esc, r5, thead, trow, ttable } from './common';
@@ -200,6 +201,7 @@ export function modalView(app: App): string {
   const m = app.modal;
   if (!m) return '';
   if (m.kind === 'player') return playerCard(app, m.id);
+  if (m.kind === 'landed') return landedModal(app, m.titles);
   if (m.kind === 'compare') return app.game ? modal('cmp-t', 'Compare', compareCards(app, m.a, m.b, 'cmp', ['', '']), true) : '';
   if (m.kind === 'card') return app.game?.players.get(m.id) ? modal('bc-t', 'Baseball Card', `<div class="bc-modal">${baseballCard(app, m.id, 'modal')}</div><div class="row-actions">${btn('PROFILE', 'player', { data: { id: m.id } })}</div>`) : '';
   if (m.kind === 'settings') return settingsModal(app);

@@ -122,7 +122,7 @@ const ROOMS = {
       { id: 'computer', fp: [2, 3, 2, 1], size: [32, 32], label: 'LEADERS', use: 'go:leaders' },
       { id: 'cabinet', fp: [4, 3, 1, 1], size: [16, 32], label: 'GAME LOG', use: 'go:gamelog' },
       { id: 'chair', fp: [9, 4, 2, 1], size: [32, 32], use: 'say', say: ['Your chair. It squeaks in a way that sounds like booing.'] },
-      { id: 'desk', fp: [8, 5, 4, 2], size: [64, 48], label: 'STANDINGS', use: 'go:standings' },
+      { id: 'desk', fp: [8, 5, 4, 2], size: [64, 48], label: 'DESK', use: 'go:standings' },
       { id: 'tv', fp: [2, 8, 2, 1], size: [32, 32], glass: [4, 4, 24, 14], label: 'TONIGHT', use: 'fn:tv' },
       { id: 'armchair', fp: [14, 8, 2, 1], size: [32, 32], use: 'say', say: ['Comfortable. Dangerously comfortable.'] },
       { id: 'newspaper', fp: [16, 8, 1, 1], size: [16, 24], label: 'HEADLINES', use: 'go:news' },
@@ -759,6 +759,8 @@ function dash(sel) { return document.querySelector('#app .screen-home ' + sel); 
 const txt = (n) => (n ? n.textContent.replace(/\s+/g, ' ').trim() : '');
 function todayGame() { const g = game(); if (!g || g.over) return null; try { return g.gameOn(g.day, g.userTeam) || null; } catch { return null; } }
 function bannerDate() { const s = txt(dash('.banner-sub')); const m = s.match(/[A-Z]{3} [A-Z]{3} \d{1,2}/); return m ? m[0] : s || 'today'; }
+/** Decision cards waiting on the desk (step 2.8): the desk opens them instead of the standings. */
+function cardsWaiting() { const g = game(); return !!(g && g.cards && g.cards.desk && g.cards.desk.length); }
 function headlinesNew() { const g = game(); if (!g) return false; return (g.headlines?.length || 0) > (S.seen[g.seed] ?? 0); }
 function markHeadlinesSeen() { const g = game(); if (!g) return; const n = g.headlines?.length || 0; if (S.seen[g.seed] !== n) { S.seen[g.seed] = n; save(true); } }
 
@@ -1042,6 +1044,7 @@ function drawMarker(cx, top, now) {
 }
 function markerOn(t) {
   if (t.id === 'newspaper') return headlinesNew();
+  if (t.id === 'desk') return cardsWaiting();
   if (t.id === 'tv' || t.id === 'steps') return !!todayGame();
   return false;
 }
@@ -1486,6 +1489,7 @@ function use(t) {
     if (arg === 'news') markHeadlinesSeen();
     save(true);
     if (arg === 'roster') return gameAct('go', { to: 'roster', team: String(g.userTeam) });
+    if (t.id === 'desk' && cardsWaiting()) return gameAct('go', { to: 'desk' });
     return gameAct('go', { to: arg });
   }
   if (kind === 'act') { save(true); return gameAct(arg, {}); }

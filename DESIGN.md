@@ -362,6 +362,25 @@ New-engine guards: runs vs BaseRuns check, RBI ≤ R, per-team start limits by r
   another position isn't supported yet (the engine keeps a slot's position). Game-log plays open their at-bat, pitch by
   pitch (in game only; the catcher's view comes with pitch locations in 3.2). Published art now loads at start
   (`loadArt`, `artUrl`).
+- 2026-10-15 — Decision cards, missions and Drama (step 2.8). **Drama** (`engine/game/drama.ts`): win probability from
+  inning, half, outs, bases and score (the current half from 2019 run expectancy and scoring odds, every half left as a
+  fresh one, ties after nine a coin flip with a 52% home edge; no dice, cached by state). A game's Drama is
+  6 + 11 × total swing + 30 × biggest swing + 4 × lead changes + extras, clamped to 0–100: median ~41, 90th ~73
+  (`npm run drama`). Your games at 78+ (about 7%, ~12 a season) bring a card. Shown on score cards, the game log and
+  the box score (with the win-probability curve and the biggest swing). **Cards** (`ui/cards.ts`, content in
+  `ui/carddefs.ts`): your cadence: SIM DAY / WEEK one storyline card a week plus one per Drama game; SIM MONTH 4–6
+  storyline cards on planned days, none from games; TO END none in season, and seasons mostly simmed (100+ days) get
+  two extra winter cards on Opening Day. A card comes at most twice a week and never twice for the same player. Weekly
+  cards last 1–3 weeks; unanswered ones take their expired outcome. A landing card stops the sim with GO TO DESK /
+  LATER (LATER finishes the sim); in the clubhouse GO TO DESK walks you to the office desk, which opens cards while
+  any wait (and Standings otherwise). Every card can be rolled (the bench coach picks by weights). **Effects**: rating
+  shifts (temporary ones on a ledger that takes them off on time and all of them before winter development),
+  ceilings (potential), team-wide shifts, headlines, flags, follow-ups months later (effects or a card), and missions.
+  Card dice are their own (league seed, day, card), so the season's dice and the baseline never move; drawing a card
+  changes nothing until it's decided, and any decided card marks the year (no password replay), as live moves do.
+  Password replays draw no cards. **Missions**: Prove It (homers in 30 days), Seven of Ten, Give Me the Ball (7 innings
+  in three straight starts), with progress from the season's own stats. First deck: 11 storyline, 4 game, 3 winter
+  (including the decree as a card). Each card is an art slot (`dcard_<id>`, 120x64).
 
 ## Design philosophy (2026-10-03)
 Realistic baseline; the fun is in finding combinations that BREAK it (ratings + abilities + favor +

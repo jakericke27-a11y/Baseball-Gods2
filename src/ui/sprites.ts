@@ -55,6 +55,7 @@ const GRIDS = {
   close: ['w....w', '.w..w.', '..ww..', '..ww..', '.w..w.', 'w....w'],
   scope: ['..wwww....', '.w....w...', 'w..ww..w..', 'w.w....w..', 'w......w..', '.w....w...', '..wwwwww..', '......www.', '.......www', '........ww'],
   flag: ['wwwyywwyyw', 'wwwyywwyyw', 'wyywwyywwy', 'wyywwyywwy', 'wwwyywwyyw', 'wwwyywwyyw', 'w.........', 'w.........', 'w.........', 'w.........'],
+  deck: ['..wwwwww..', '.w......w.', 'wwwwww..w.', 'w....w..w.', 'w.ww.w..w.', 'w....w..w.', 'w.ww.w.w..', 'w....ww...', 'w....w....', 'wwwwww....'],
   note: ['...www', '...w.w', '...w.w', '...w..', '.www..', 'wwww..', '.ww...'],
 } as const;
 

@@ -8,6 +8,7 @@ import { busyView, modalView, pickerView, titleView, toastView } from './shell';
 import { watchView } from './watch';
 import { racesView } from './races';
 import { scoutingView } from './scouting';
+import { deskView } from './desk';
 
 export function view(app: App): string {
   let screen: string;
@@ -23,6 +24,7 @@ export function view(app: App): string {
       case 'leaders': screen = leadersView(app); break;
       case 'races': screen = racesView(app); break;
       case 'scouting': screen = scoutingView(app); break;
+      case 'desk': screen = deskView(app); break;
       case 'roster': screen = rosterView(app); break;
       case 'gamelog': screen = gameLogView(app); break;
       case 'news': screen = newsView(app); break;

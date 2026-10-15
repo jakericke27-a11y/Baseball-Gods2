@@ -13,7 +13,7 @@ import { BAT_CATS, LOG_KEY, PIT_CATS, diffTone, last10Tone, playTone, recordTone
 import { bracketHtml, findSeries, FINAL_NAME, seriesShort } from '../post';
 import { DIVISIONS, LEAGUE_NAMES, LEAGUES, teamFull, teamName } from '../teams';
 import { bannerFor, simActions } from './home';
-import { btn, esc, footer, link, r5, thead, trow, ttable, win, tname } from './common';
+import { btn, dramaStrip, dramaTag, esc, footer, link, r5, thead, trow, ttable, win, tname } from './common';
 
 /** A full screen. `fixed`: on a laptop or bigger it fits the window, and long lists scroll inside their windows. */
 export const page = (app: App, current: string, inner: string, fixed = false) =>
@@ -89,7 +89,7 @@ ${[0, 1].map((side) => `<tr${r.teamIds[side] === g.userTeam ? ' class="mine"' : 
     return `<div class="hscroll"><table class="stat"><caption>${tname(r.teamIds[side])} pitching</caption><tr><th scope="col">PITCHING</th><th scope="col">IP</th><th scope="col">H</th><th scope="col">R</th><th scope="col">ER</th><th scope="col">BB</th><th scope="col">K</th><th scope="col">HR</th><th scope="col">P</th></tr>${rows}</table></div>`;
   };
   const acts = `<div class="row-actions">${btn('GAME LOG', 'go', { icon: 'scroll', data: { to: 'gamelog', index } })}${btn('REPLAY', 'replay', { icon: 'play', data: { index }, title: 'Watch this game pitch by pitch' })}</div>`;
-  return `${ls}${acts}<div class="box-grid">${bat(0)}${bat(1)}</div><div class="box-grid">${pit(0)}${pit(1)}</div>`;
+  return `${ls}${dramaStrip(r, g.name)}${acts}<div class="box-grid">${bat(0)}${bat(1)}</div><div class="box-grid">${pit(0)}${pit(1)}</div>`;
 }
 
 /** Every finished year: the champion, the final they beat, and how your team did. */
@@ -150,7 +150,7 @@ export function gamesView(app: App): string {
     const side = (s: 0 | 1) => `<span class="sc-team${r.score[s] > r.score[1 - s] ? ' won' : ''}">${tname(r.teamIds[s])}</span><span class="sc-runs${r.score[s] > r.score[1 - s] ? ' won' : ''}">${r.score[s]}</span>`;
     const mine = r.teamIds.includes(g.userTeam);
     return `<li><button type="button" class="score-card${i === app.gamesPick ? ' picked' : ''}${mine ? ' mine' : ''}" data-act="games-pick" data-index="${i}" data-key="games-pick:${i}" aria-pressed="${i === app.gamesPick}">
-<span class="sc-row">${side(0)}</span><span class="sc-row">${side(1)}</span><span class="sc-meta">${gameTag(g, r)}F${r.innings > 9 ? `/${r.innings}` : ''} · W ${esc(wNm)} · L ${esc(lNm)}</span></button></li>`;
+<span class="sc-row">${side(0)}</span><span class="sc-row">${side(1)}</span><span class="sc-meta">${gameTag(g, r)}F${r.innings > 9 ? `/${r.innings}` : ''} · W ${esc(wNm)} · L ${esc(lNm)}</span>${dramaTag(r)}</button></li>`;
   }).join('');
   const r = g.season.results[app.gamesPick];
   const box = win({ id: 'w-box', title: 'Box Score', label: `${esc(teamName(r.teamIds[0])).toUpperCase()} AT ${esc(teamName(r.teamIds[1])).toUpperCase()} · ${shortDate(r.day)}`, body: boxScoreHtml(g, r, app.gamesPick), scroll: true, cls: 'w-boxscore' });
@@ -298,7 +298,7 @@ export function gameLogView(app: App): string {
     const x = g.season.results[i];
     const side = x.teamIds[0] === g.userTeam ? 0 : 1;
     const won = x.score[side] > x.score[1 - side];
-    return `<li><button type="button" class="glist${i === app.logPick ? ' picked' : ''}" data-act="log-pick" data-index="${i}" data-key="log-pick:${i}" aria-pressed="${i === app.logPick}"><span class="d">${shortDate(x.day)}</span><span class="o">${side ? 'vs' : 'at'} ${esc(teamName(x.teamIds[1 - side]))}</span><span class="res ${won ? 'good' : 'bad'}">${won ? 'W' : 'L'} ${x.score[side]}-${x.score[1 - side]}${x.innings > 9 ? ` (${x.innings})` : ''}</span></button></li>`;
+    return `<li><button type="button" class="glist${i === app.logPick ? ' picked' : ''}" data-act="log-pick" data-index="${i}" data-key="log-pick:${i}" aria-pressed="${i === app.logPick}"><span class="d">${shortDate(x.day)}</span><span class="o">${side ? 'vs' : 'at'} ${esc(teamName(x.teamIds[1 - side]))}</span><span class="res ${won ? 'good' : 'bad'}">${won ? 'W' : 'L'} ${x.score[side]}-${x.score[1 - side]}${x.innings > 9 ? ` (${x.innings})` : ''}</span>${dramaTag(x)}</button></li>`;
   }).join('');
   // Play-by-play grouped by half-inning.
   const events = decodeEvents(r.log!);

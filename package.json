@@ -17,7 +17,8 @@
     "smoke": "tsx tools/build-web.ts && tsx tools/smoke.ts",
     "years": "tsx tools/years.ts",
     "decrees": "tsx tools/decrees.ts",
-    "tactics": "tsx tools/tactics.ts"
+    "tactics": "tsx tools/tactics.ts",
+    "drama": "tsx tools/drama.ts"
   },
   "devDependencies": {
     "@types/jsdom": "^21.1.7",

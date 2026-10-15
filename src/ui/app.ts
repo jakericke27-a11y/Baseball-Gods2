@@ -4,6 +4,7 @@
  */
 import { flowColumns } from './flow';
 import { loadArt } from './art';
+import { answerCard, planMonth } from './cards';
 import { newSplitView, type SplitView } from './views/card';
 import { newManage, type ManageState, type ManageTarget } from './views/manage';
 import { newBoardState, type BoardState } from './views/board';
@@ -29,8 +30,8 @@ import { SLOT, deleteLeague, getLeague, putLeague, requestPersistence } from './
 import { applyTeamColors, teamColors, teamName } from './teams';
 import { view } from './views';
 
-export type Screen = 'title' | 'picker' | 'draft' | 'home' | 'watch' | 'standings' | 'games' | 'leaders' | 'races' | 'scouting' | 'roster' | 'gamelog' | 'news' | 'offseason';
-export type Modal = { kind: 'settings' } | { kind: 'player'; id: number } | { kind: 'card'; id: number } | { kind: 'compare'; a: number; b: number } | { kind: 'password' } | { kind: 'restart' };
+export type Screen = 'title' | 'picker' | 'draft' | 'home' | 'watch' | 'standings' | 'games' | 'leaders' | 'races' | 'scouting' | 'roster' | 'gamelog' | 'news' | 'offseason' | 'desk';
+export type Modal = { kind: 'settings' } | { kind: 'player'; id: number } | { kind: 'card'; id: number } | { kind: 'compare'; a: number; b: number } | { kind: 'landed'; titles: string[] } | { kind: 'password' } | { kind: 'restart' };
 /** Live games: who makes your team's moves. 'ask': the bench coach asks first; 'me': nothing moves unless you do;
  *  'ai': the bench coach decides and play flows (you can still step in). */
 export type ManagerMode = 'ask' | 'me' | 'ai';
@@ -89,6 +90,8 @@ export class App {
   splitView: SplitView = newSplitView();
   /** The MANAGE screen in a live game: who's coming out, who's going in, and where. */
   manage: ManageState = newManage();
+  /** A sim stopped by a decision card: where it was going, to pick up after LATER. */
+  resumeSim: { target: number; toPost: boolean } | null = null;
   /** Roster COMPARE: on, and the first player picked. */
   cmp = { on: false, a: 0 };
   /** The game-log line opened to show its at-bat (-1: none). */
@@ -276,6 +279,8 @@ export class App {
   // ------------------------------------------------------------------ rendering
 
   render(): void {
+    const lg = this.game;
+    if (lg?.landed.length && !this.modal && !this.busy && !lg.live) { this.modal = { kind: 'landed', titles: lg.landed.map((c) => c.title) }; lg.landed = []; }
     const scrolls = new Map<string, number>();
     this.root.querySelectorAll<HTMLElement>('[data-scroll]').forEach((el) => scrolls.set(el.dataset.scroll!, el.scrollTop));
     const active = document.activeElement as HTMLElement | null;
@@ -444,10 +449,12 @@ export class App {
     await this.withBusy('Replaying Year 1', s.day, false, async (step) => {
       await tick();
       g = new Game(s.seed, s.team);
+      g.replaying = true; // a password replay has no decisions in it: no cards
       while (g.day < s.day && !g.over) {
         g.simDay();
         await step(g.day, g.headlines.at(-1)?.text);
       }
+      g.replaying = false;
     });
     this.game = g;
     this.afterLoad();
@@ -467,6 +474,8 @@ export class App {
   async sim(span: 'day' | number | 'end'): Promise<void> {
     const g = this.game;
     if (!g || g.over || this.busy) return;
+    this.resumeSim = null;
+    g.simMode = span === 'day' ? 'day' : span === 'end' ? 'end' : span >= 28 ? 'month' : 'week';
     if (span === 'day') {
       let played = 0;
       while (!g.over && played === 0) played = g.simDay().length;
@@ -474,14 +483,22 @@ export class App {
       this.render();
       return;
     }
+    if (g.simMode === 'month') planMonth(g, span as number);
     // The schedule grows in October (Game 163s, each new round), so spans are counted in days, not schedule length.
     const toPost = span === 'end' && !regularOver(g.season);
+    await this.simTo(span === 'end' ? Infinity : g.day + span, toPost);
+  }
+
+  /** Sim toward a day; a decision card landing stops it (LATER picks it up again). */
+  private async simTo(target: number, toPost: boolean): Promise<void> {
+    const g = this.game!;
     const from = g.day;
-    const target = span === 'end' ? Infinity : g.day + span; // to the end of the regular season includes any Game 163
-    const total = span === 'end' ? Math.max(1, (toPost ? g.season.regularDays : g.season.schedule.days) - from) : span;
-    await this.withBusy(span === 'end' ? (toPost ? 'Simming to the end of the regular season' : 'Simming the rest of the postseason') : `Simming ${span} days`, total, true, async (step) => {
+    const total = target === Infinity ? Math.max(1, (toPost ? g.season.regularDays : g.season.schedule.days) - from) : target - from;
+    await this.withBusy(target === Infinity ? (toPost ? 'Simming to the end of the regular season' : 'Simming the rest of the postseason') : `Simming ${total} days`, total, true, async (step) => {
       while (g.day < target && !g.over && !this.stop && !(toPost && regularOver(g.season))) {
+        const had = g.landed.length;
         g.simDay();
+        if (g.landed.length > had) { if (g.day < target && !g.over) this.resumeSim = { target, toPost }; break; }
         await step(g.day - from, g.headlines.at(-1)?.text);
       }
     });
@@ -979,6 +996,19 @@ export class App {
         const w = this.watch;
         if (w && g?.live) { const stop = this.liveStop(); if (stop?.block) { w.alert = stop.text; this.render(); return; } w.alert = ''; const res = g.liveAdvance(); if (res || !g.live) { this.liveDone(); return; } w.replay = this.liveReplay(); this.stepWatch(w.at + 1); }
         return;
+      }
+      case 'landed-go': {
+        this.modal = null; this.resumeSim = null;
+        const hub = (window as unknown as { __hub?: { state: { on: boolean }; teleport: (r: string, x: number, y: number, f: string) => void } }).__hub;
+        if (hub?.state.on) { this.screen = 'home'; this.render(); try { hub.teleport('office', 10, 7, 'up'); } catch { /* clubhouse off */ } return; }
+        this.screen = 'desk'; this.render(); return;
+      }
+      case 'landed-later': { this.modal = null; const r = this.resumeSim; this.resumeSim = null; if (r && g && !g.over) await this.simTo(r.target, r.toPost); else this.render(); return; }
+      case 'dc-answer': {
+        if (!g) return;
+        const e = answerCard(g, Number(d.uid), d.i === 'roll' ? 'roll' : Number(d.i));
+        if (e) this.showToast(`${e.how === 'rolled' ? 'Bench coach: ' : ''}${e.choice}. ${e.result}`);
+        this.persist(); this.render(); return;
       }
       case 'cmp-toggle': this.cmp = { on: !this.cmp.on, a: 0 }; this.render(); return;
       case 'cmp-pick': {

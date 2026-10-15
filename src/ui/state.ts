@@ -16,6 +16,7 @@ import { postHeadlines } from './post';
 import { raceHeadlines, raceStatus } from './races';
 import { catchUpStreaks, newStreakBook, type StreakBook } from '../engine/season/races';
 import { teamName } from './teams';
+import { cardsAfterDay, cardsBeforeWinter, cardsNewYear, newBook, type CardBook, type CardInst, type SimMode } from './cards';
 
 export const PARAMS = applyEnvironment(DEFAULT_PARAMS, baseline as LeagueEnvironment);
 /** Bump when engine changes would replay an old save differently. */
@@ -44,6 +45,14 @@ export class Game {
   draftedByHand = false;
   /** You made a move in a live game that the bench coach wouldn't have (then the Year 1 password can't replay the year). */
   movedByHand = false;
+  /** Decision cards and missions (cards.ts): saved with the league. */
+  cards: CardBook = newBook();
+  /** How the days are being simmed right now, for the card rules. */
+  simMode: SimMode = 'day';
+  /** Replaying a year from its password: no cards come up. */
+  replaying = false;
+  /** Cards that just landed on your desk (the app shows the pop-up and clears this). */
+  landed: CardInst[] = [];
 
   /** A new league, or (with `season`) one restored from a save. */
   constructor(seed: number, userTeam: number, league?: League, season?: Season) {
@@ -126,6 +135,7 @@ export class Game {
   /** After the final: the first half of the winter. In a draft year a draft is waiting (this.winter.draft). */
   beginWinter(): Winter {
     if (!this.over) throw new Error('the year is not over');
+    cardsBeforeWinter(this);
     this.winter = beginWinter(this.season);
     return this.winter;
   }
@@ -138,6 +148,7 @@ export class Game {
     this.headlines = [];
     if (report.decree) this.headlines.push({ day: 0, text: `The Gods decree ${report.decree.label.toUpperCase()}: ${report.decree.effect}`, teamId: 0, big: true });
     this.offseason = report;
+    this.landed.push(...cardsNewYear(this));
     return report;
   }
   startNextYear(): OffseasonReport { this.beginWinter(); return this.finishWinter(); }
@@ -162,6 +173,7 @@ export class Game {
     this.addHeadlines(day, results);
     this.headlines.push(...postHeadlines(this, day, results));
     this.headlines.push(...raceHeadlines(this, day, results, before, catchUpStreaks(this.streaks, this.season.results)));
+    if (!this.replaying) this.landed.push(...cardsAfterDay(this, day, results, this.simMode));
   }
 
   // ---------------------------------------------------------------- your game, live
