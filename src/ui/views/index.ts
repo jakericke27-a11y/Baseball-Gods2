@@ -26,6 +26,7 @@ export function view(app: App): string {
       case 'scouting': screen = scoutingView(app); break;
       case 'desk': screen = deskView(app); break;
       case 'roster': screen = rosterView(app); break;
+      case 'transactions': screen = rosterView(app, true); break;
       case 'news': screen = newsView(app); break;
       case 'offseason': screen = app.game.offseason ? offseasonView(app) : homeView(app); break;
       default: screen = homeView(app);

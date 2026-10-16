@@ -1,5 +1,5 @@
 /** Full screens behind the footer icons: standings, games and box scores, leaders, roster, game log, news. */
-import { decodeEvents, eventText, halfLabel, POS_ABBR } from '../../engine/game/text';
+import { decodeEvents, eventText, halfLabel, ordinal, POS_ABBR } from '../../engine/game/text';
 import type { GameResult } from '../../engine/game/types';
 import { peekStarter, recoveredFatigue } from '../../engine/season/season';
 import { formatStart } from '../../engine/season/schedule';
@@ -9,7 +9,7 @@ import { projection } from '../../engine/draft';
 import type { App } from '../app';
 import { dateLabel, shortDate } from '../calendar';
 import type { Game } from '../state';
-import { BAT_CATS, LOG_KEY, PIT_CATS, diffTone, last10Tone, playTone, recordTone, streakTone, avg, era, era2, gbText, heat, ip, last10, leaders, obp, pct, races, rate3, slg, streakText, whip } from '../stats';
+import { BAT_CATS, LOG_KEY, PIT_CATS, diffTone, last10Tone, playTone, recordTone, streakTone, avg, era, era2, gbText, heat, ip, last10, leaders, obp, pct, races, rate3, slg, streakText, teamTotals, whip, type TeamTotals } from '../stats';
 import { bracketHtml, findSeries, FINAL_NAME, seriesShort } from '../post';
 import { DIVISIONS, LEAGUE_NAMES, LEAGUES, teamFull, teamName } from '../teams';
 import { bannerFor, simActions } from './home';
@@ -21,37 +21,77 @@ export const page = (app: App, current: string, inner: string, fixed = false) =>
 
 // ------------------------------------------------------------------ standings
 
+export type StandTab = 'division' | 'playoffs';
+export type StandStat = 'record' | 'hitting' | 'pitching';
+
+/** A team stat column for the division view: value, format, and whether low is good. */
+interface TeamCol { k: string; label: string; v: (t: TeamTotals) => number; fmt: (x: number) => string; low?: boolean }
+const tr3 = (x: number) => rate3(x);
+const HIT_COLS: TeamCol[] = [
+  { k: 'AVG', label: 'Batting average', v: (t) => avg(t.bat), fmt: tr3 }, { k: 'OBP', label: 'On-base', v: (t) => obp(t.bat), fmt: tr3 },
+  { k: 'SLG', label: 'Slugging', v: (t) => slg(t.bat), fmt: tr3 }, { k: 'OPS', label: 'On-base plus slugging', v: (t) => obp(t.bat) + slg(t.bat), fmt: tr3 },
+  { k: 'R/G', label: 'Runs a game', v: (t) => t.bat.R / Math.max(1, t.G), fmt: (x) => x.toFixed(2) }, { k: 'HR', label: 'Home runs', v: (t) => t.bat.HR, fmt: (x) => String(x) },
+  { k: 'SB', label: 'Stolen bases', v: (t) => t.bat.SB, fmt: (x) => String(x) }, ];
+const PIT_COLS: TeamCol[] = [
+  { k: 'ERA', label: 'Earned run average', v: (t) => era(t.pit), fmt: era2, low: true }, { k: 'RA/G', label: 'Runs allowed a game', v: (t) => t.pit.R / Math.max(1, t.G), fmt: (x) => x.toFixed(2), low: true },
+  { k: 'WHIP', label: 'Walks and hits per inning', v: (t) => whip(t.pit), fmt: (x) => x.toFixed(2), low: true }, { k: 'K/9', label: 'Strikeouts per nine', v: (t) => (27 * t.pit.K) / Math.max(1, t.pit.outs), fmt: (x) => x.toFixed(1) },
+  { k: 'BB/9', label: 'Walks per nine', v: (t) => (27 * t.pit.BB) / Math.max(1, t.pit.outs), fmt: (x) => x.toFixed(1), low: true }, { k: 'HR/9', label: 'Homers per nine', v: (t) => (27 * t.pit.HR) / Math.max(1, t.pit.outs), fmt: (x) => x.toFixed(2), low: true },
+  ];
+
+/** Each team's value in a column, ranked 1–30 across the league, toned in the top and bottom five. */
+function rankCell(all: TeamTotals[], c: TeamCol, t: TeamTotals): string {
+  const v = c.v(t), rank = 1 + all.filter((o) => (c.low ? c.v(o) < v : c.v(o) > v)).length;
+  const tone = !t.G ? 0 : rank <= 5 ? 1 : rank > all.length - 5 ? -1 : 0;
+  return `<span class="${tone > 0 ? 'pos' : tone < 0 ? 'neg' : ''}" title="${esc(c.label)}: ${ordinal(rank)} of ${all.length}">${c.fmt(v)}<sup class="rk">${rank}</sup></span>`;
+}
+
 export function standingsView(app: App): string {
-  const g = app.game!;
-  const cols = 'minmax(90px, 1fr) 32px 32px 46px 42px 40px 38px 40px 40px 44px 50px 50px';
-  const cols2 = 'minmax(90px, 1fr) 32px 32px 46px 42px 40px 38px';
-  const head = thead(['TEAM', 'W', 'L', 'PCT', 'GB', 'L10', 'STK', '<span class="x">RS</span>', '<span class="x">RA</span>', '<span class="x">DIFF</span>', '<span class="x">HOME</span>', '<span class="x">AWAY</span>']);
-  const cols3 = races(g).map((race) => {
-    const divs = race.divisions.map((d) => {
-      const rows = d.rows.map((r) => {
-        const diff = r.RS - r.RA;
-        return trow([link(teamName(r.teamId), 'team', { id: r.teamId }), recordTone(r, String(r.W)), recordTone(r, String(r.L)), recordTone(r, rate3(pct(r))), gbText(r.gb), last10Tone(r), streakTone(r),
-          `<span class="x">${r.RS}</span>`, `<span class="x">${r.RA}</span>`, `<span class="x">${diffTone(r)}</span>`,
-          `<span class="x">${r.homeW}-${r.homeL}</span>`, `<span class="x">${r.awayW}-${r.awayL}</span>`], heat(r), r.teamId === g.userTeam);
-      }).join('');
-      return win({ id: `w-st-${race.league}-${d.division}`, title: DIVISIONS[d.division], label: LEAGUES[race.league].toUpperCase(), body: `<div class="hscroll">${ttable(cols, `${LEAGUES[race.league]} ${DIVISIONS[d.division]}`, head + rows).replace('class="ttable"', 'class="ttable full"')}</div>` });
-    }).join('');
-    let wc = '';
-    race.wildCard.forEach((w, i) => {
-      const gb = i < 2 ? (w.gb === 0 ? '—' : `+${(-w.gb).toFixed(1)}`) : gbText(w.gb);
-      wc += trow([link(teamName(w.row.teamId), 'team', { id: w.row.teamId }), recordTone(w.row, String(w.row.W)), recordTone(w.row, String(w.row.L)), recordTone(w.row, rate3(pct(w.row))), gb, last10Tone(w.row), streakTone(w.row)], heat(w.row), w.row.teamId === g.userTeam);
-      if (i === 1) wc += '<div class="playoff-line" role="presentation">PLAYOFF LINE</div>';
-    });
-    const seeds = race.divisions.map((d) => d.rows[0]).sort((a, b) => pct(b) - pct(a));
-    const picture = [...seeds.map((r, i) => `<li><span class="seed">${i + 1}</span>${link(teamName(r.teamId), 'team', { id: r.teamId })} <span class="muted">${r.W}-${r.L} · ${DIVISIONS[race.divisions.find((d) => d.rows[0] === r)!.division]}</span></li>`),
-      ...race.wildCard.slice(0, 2).map((w, i) => `<li><span class="seed">${i + 4}</span>${link(teamName(w.row.teamId), 'team', { id: w.row.teamId })} <span class="muted">${w.row.W}-${w.row.L} · Wild card</span></li>`)].join('');
-    return `<div class="league-col"><h2 class="page-h">${LEAGUE_NAMES[race.league]}</h2>
-${g.season.post?.seeds.length ? '' : win({ id: `w-pic-${race.league}`, title: 'Playoff Picture', label: 'IF IT ENDED TODAY', body: `<ol class="seeds">${picture}</ol>` })}
-${divs}${win({ id: `w-wc-${race.league}`, title: 'Wild Card', label: LEAGUES[race.league].toUpperCase(), body: ttable(cols2, 'Wild card race', thead(['TEAM', 'W', 'L', 'PCT', 'GB', 'L10', 'STK']) + wc) })}</div>`;
-  }).join('');
+  const g = app.game!, tab = app.standTab, stat = app.standStat;
   const P = g.season.post;
-  const bracket = P?.seeds.length ? win({ id: 'w-bracket', title: 'Postseason', label: P.champion ? `${FINAL_NAME.toUpperCase()} CHAMPIONS: ${teamName(P.champion).toUpperCase()}` : 'THE BRACKET', body: bracketHtml(g, esc, link), cls: 'w-bracket wide' }) : '';
-  return page(app, 'standings', `${bracket}<div class="two-col">${cols3}</div>${pastSeasons(g)}`);
+  const tabs = (k: string, cur: string, opts: Array<[string, string]>, label: string) =>
+    `<div class="tabs" role="group" aria-label="${label}">${opts.map(([v, text]) => `<button type="button" class="tab${cur === v ? ' on' : ''}" data-act="${k}" data-v="${v}" data-key="${k}:${v}" aria-pressed="${cur === v}">${text}</button>`).join('')}</div>`;
+  const head = `<div class="lead-head"><div class="lead-filters">${tabs('stand-tab', tab, [['division', 'DIVISIONS'], ['playoffs', 'PLAYOFF PICTURE']], 'Standings')}${tab === 'division' ? tabs('stand-stat', stat, [['record', 'RECORD'], ['hitting', 'HITTING'], ['pitching', 'PITCHING']], 'Show') : ''}</div></div>`;
+  const R = races(g);
+  let body = '';
+  if (tab === 'division') {
+    const totals = teamTotals(g), all = [...totals.values()];
+    const cols = stat === 'hitting' ? HIT_COLS : stat === 'pitching' ? PIT_COLS : null;
+    const recCols = 'minmax(90px, 1fr) 32px 32px 46px 42px 40px 38px 40px 40px 44px 50px 50px';
+    body = `<div class="two-col">${R.map((race) => `<div class="league-col"><h2 class="page-h">${LEAGUE_NAMES[race.league]}</h2>${race.divisions.map((d) => {
+      let table: string;
+      if (!cols) {
+        const hd = thead(['TEAM', 'W', 'L', 'PCT', 'GB', 'L10', 'STK', '<span class="x">RS</span>', '<span class="x">RA</span>', '<span class="x">DIFF</span>', '<span class="x">HOME</span>', '<span class="x">AWAY</span>']);
+        const rows = d.rows.map((r) => trow([link(teamName(r.teamId), 'team', { id: r.teamId }), recordTone(r, String(r.W)), recordTone(r, String(r.L)), recordTone(r, rate3(pct(r))), gbText(r.gb), last10Tone(r), streakTone(r),
+          `<span class="x">${r.RS}</span>`, `<span class="x">${r.RA}</span>`, `<span class="x">${diffTone(r)}</span>`,
+          `<span class="x">${r.homeW}-${r.homeL}</span>`, `<span class="x">${r.awayW}-${r.awayL}</span>`], heat(r), r.teamId === g.userTeam)).join('');
+        table = ttable(recCols, `${LEAGUES[race.league]} ${DIVISIONS[d.division]}`, hd + rows);
+      } else {
+        const hd = thead(['TEAM', 'W-L', ...cols.map((c) => `<span title="${esc(c.label)}">${esc(c.k)}</span>`)]);
+        const rows = d.rows.map((r) => { const t = totals.get(r.teamId)!; return trow([link(teamName(r.teamId), 'team', { id: r.teamId }), `${r.W}-${r.L}`, ...cols.map((c) => rankCell(all, c, t))], heat(r), r.teamId === g.userTeam); }).join('');
+        table = ttable(`minmax(112px, 1.7fr) 58px ${cols.map(() => 'minmax(48px, 1fr)').join(' ')}`, `${LEAGUES[race.league]} ${DIVISIONS[d.division]} ${stat}`, hd + rows);
+      }
+      return win({ id: `w-st-${race.league}-${d.division}`, title: DIVISIONS[d.division], label: LEAGUES[race.league].toUpperCase(), body: `<div class="hscroll">${table.replace('class="ttable"', `class="ttable full${cols ? ' rank-t' : ''}"`)}</div>` });
+    }).join('')}</div>`).join('')}</div>${cols ? '<p class="note muted small">Small numbers are each team\'s rank in the majors (1 is best); the top five are green and the bottom five red. Regular season only.</p>' : ''}`;
+  } else {
+    const cols2 = 'minmax(90px, 1fr) 32px 32px 46px 42px 40px 38px';
+    const bracket = P?.seeds.length ? win({ id: 'w-bracket', title: 'Postseason', label: P.champion ? `${FINAL_NAME.toUpperCase()} CHAMPIONS: ${teamName(P.champion).toUpperCase()}` : 'THE BRACKET', body: bracketHtml(g, esc, link), cls: 'w-bracket wide' }) : '';
+    const leagues = R.map((race) => {
+      let wc = '';
+      race.wildCard.forEach((w, i) => {
+        const gb = i < 2 ? (w.gb === 0 ? '—' : `+${(-w.gb).toFixed(1)}`) : gbText(w.gb);
+        wc += trow([link(teamName(w.row.teamId), 'team', { id: w.row.teamId }), recordTone(w.row, String(w.row.W)), recordTone(w.row, String(w.row.L)), recordTone(w.row, rate3(pct(w.row))), gb, last10Tone(w.row), streakTone(w.row)], heat(w.row), w.row.teamId === g.userTeam);
+        if (i === 1) wc += '<div class="playoff-line" role="presentation">PLAYOFF LINE</div>';
+      });
+      const seeds = race.divisions.map((d) => d.rows[0]).sort((a, b) => pct(b) - pct(a));
+      const picture = [...seeds.map((r, i) => `<li><span class="seed">${i + 1}</span>${link(teamName(r.teamId), 'team', { id: r.teamId })} <span class="muted">${r.W}-${r.L} · ${DIVISIONS[race.divisions.find((d) => d.rows[0] === r)!.division]}</span></li>`),
+        ...race.wildCard.slice(0, 2).map((w, i) => `<li><span class="seed">${i + 4}</span>${link(teamName(w.row.teamId), 'team', { id: w.row.teamId })} <span class="muted">${w.row.W}-${w.row.L} · Wild card</span></li>`)].join('');
+      return `<div class="league-col"><h2 class="page-h">${LEAGUE_NAMES[race.league]}</h2>
+${P?.seeds.length ? '' : win({ id: `w-pic-${race.league}`, title: 'Playoff Picture', label: 'IF IT ENDED TODAY', body: `<ol class="seeds">${picture}</ol>` })}
+${win({ id: `w-wc-${race.league}`, title: 'Wild Card', label: LEAGUES[race.league].toUpperCase(), body: ttable(cols2, 'Wild card race', thead(['TEAM', 'W', 'L', 'PCT', 'GB', 'L10', 'STK']) + wc) })}</div>`;
+    }).join('');
+    body = `${bracket}<div class="two-col">${leagues}</div>`;
+  }
+  return page(app, 'standings', head + body);
 }
 
 // ------------------------------------------------------------------ games and box scores
@@ -90,27 +130,6 @@ ${[0, 1].map((side) => `<tr${r.teamIds[side] === g.userTeam ? ' class="mine"' : 
   };
   const acts = `<div class="row-actions">${btn('GAME LOG', 'go', { icon: 'scroll', data: { to: 'gamelog', index } })}${btn('REPLAY', 'replay', { icon: 'play', data: { index }, title: 'Watch this game pitch by pitch' })}</div>`;
   return `${ls}${dramaStrip(r, g.name)}${acts}<div class="box-grid">${bat(0)}${bat(1)}</div><div class="box-grid">${pit(0)}${pit(1)}</div>`;
-}
-
-/** Every finished year: the champion, the final they beat, and how your team did. */
-function pastSeasons(g: Game): string {
-  const H = g.league.history;
-  if (!H.length) return '';
-  const finish = (y: (typeof H)[number], id: number) => {
-    const t = y.teams.find((x) => x.teamId === id)!;
-    const out = [...y.series].reverse().find((s) => s.high === id || s.low === id);
-    const how = y.champion === id ? 'Won it all' : out ? `Lost ${out.round === 'WS' ? 'the final' : out.round === 'LCS' ? 'the CS' : out.round === 'DS' ? 'the DS' : 'the wild card'}` : ['1st', '2nd', '3rd', '4th', '5th'][t.place - 1] + ' in division';
-    return { rec: `${t.W}-${t.L}`, how };
-  };
-  const rows = [...H].reverse().map((y) => {
-    const ws = y.series.find((s) => s.round === 'WS');
-    const loser = ws ? (ws.winner === ws.high ? ws.low : ws.high) : 0;
-    const mine = finish(y, g.userTeam);
-    const champ = y.champion ? `${link(teamName(y.champion), 'team', { id: y.champion })}${loser ? ` <span class="muted">over ${esc(teamName(loser))}${ws ? ` ${Math.max(...ws.wins)}-${Math.min(...ws.wins)}` : ''}</span>` : ''}` : '—';
-    const decree = y.decree ? `<span class="decree-sub">${esc(y.decree)}</span>` : '';
-    return `<li class="${y.champion === g.userTeam ? 'mine' : ''}"><span class="rank">${y.year}</span><span class="nm">${champ}${decree}</span><span class="val">You: ${mine.rec}, ${esc(mine.how.toLowerCase())}</span></li>`;
-  }).join('');
-  return win({ id: 'w-past', title: 'Past Seasons', label: `${H.length} ${H.length === 1 ? 'YEAR' : 'YEARS'} · ${FINAL_NAME.toUpperCase()} CHAMPIONS`, body: `<ol class="lead-list past-list">${rows}</ol>`, cls: 'w-past wide' });
 }
 
 /** "AL DS G3 · " for postseason games, "GAME 163 · " for tiebreakers. */
@@ -166,16 +185,17 @@ function fatigueBar(f: number): string {
   return `<span class="fbar" role="img" aria-label="Fatigue ${Math.round(f)} of 100">${Array.from({ length: 10 }, (_, i) => `<i class="${i < n ? (n >= 7 ? 'hot' : n >= 4 ? 'warm' : 'on') : ''}"></i>`).join('')}</span>`;
 }
 
-export function rosterView(app: App): string {
+/** Roster, or (`txn`) Transactions: the waiver wire, free agents and your prospects, the moves from outside the 40. */
+export function rosterView(app: App, txn = false): string {
   const g = app.game!;
-  const teamId = app.rosterTeam || g.userTeam;
+  const teamId = txn ? g.userTeam : app.rosterTeam || g.userTeam;
   const mine = teamId === g.userTeam;
   const plan = g.season.plans.get(teamId)!;
   const team = g.league.teams.find((t) => t.id === teamId)!;
   const active = new Set(activeOf(team));
   const players = team.playerIds.map((id) => g.players.get(id)!);
   const auto = team.auto ?? { lineup: true, staff: true, roster: true };
-  const tab = mine ? app.rosterTab : 'lineup';
+  const tab = txn ? 'moves' : mine ? app.rosterTab : 'lineup';
   const sel = `<label class="team-select"><span class="k">TEAM</span><select data-act="roster-team" id="roster-team">${g.league.teams.map((t) => `<option value="${t.id}"${t.id === teamId ? ' selected' : ''}>${esc(teamName(t.id))}${t.id === g.userTeam ? ' (you)' : ''}</option>`).join('')}</select></label>`;
   const tabs = [['lineup', 'TEAM'], ...(mine ? [['moves', '26 & RESERVES']] : [])]
     .map(([k, label]) => `<button type="button" class="tab${tab === k ? ' on' : ''}" data-act="roster-tab" data-tab="${k}" data-key="roster-tab:${k}" aria-pressed="${tab === k}">${label}</button>`).join('')
@@ -272,14 +292,18 @@ export function rosterView(app: App): string {
         : '<p class="note muted">No prospects. Picks from the four-year draft wait here until you add them to the 40 or their rights run out.</p>' });
     const fas = [...g.league.freeAgents].sort((a, b) => playerValue(b) - playerValue(a)).slice(0, 15)
       .map((p) => `<tr><th scope="row">${esc(p.name)}</th><td>${p.position === 'P' ? (p.pitcherRole ?? 'P') : p.position}</td><td>${p.age}</td><td>${Math.round(playerValue(p))}</td><td>${optionsLeft(p)} left</td><td class="acts">${btn('SIGN', 'sign', { data: { id: p.id }, disabled: !room, title: room ? 'He joins your reserves' : 'Your 40-man roster is full: release someone first' })}</td></tr>`).join('');
-    body = `<div class="row-actions">${autoBtn('roster')}<span class="note small">${left} of ${RULES.movesPerMonth} moves left this month · ${team.playerIds.length} of 40 · a call-up sends someone of the same kind down; out of options means waivers first.</span></div>
+    const status = `<div class="row-actions">${autoBtn('roster')}<span class="note small">${left} of ${RULES.movesPerMonth} moves left this month · ${team.playerIds.length} of 40 · ${txn ? 'signings and promotions join your reserves.' : 'a call-up sends someone of the same kind down; out of options means waivers first.'}</span></div>`;
+    body = txn
+      ? `${status}<div class="txn-grid">${win({ id: 'w-waive', title: 'Waiver Wire', label: `${g.league.waivers.length} PLAYERS · WORST RECORD CLAIMS FIRST`, body: waivers ? tbl(head('PLAYER').replace('OPTIONS', 'FROM'), waivers, 'Waivers') : '<p class="note muted">Nobody on waivers.</p>' })}
+${win({ id: 'w-fa', title: 'Free Agents', label: room ? 'SIGN TO THE RESERVES' : 'YOUR 40 IS FULL', body: tbl(head('FREE AGENT'), fas, 'Free agents') })}
+${prospectsWin}</div>`
+      : `${status}
 ${win({ id: 'w-active', title: 'Active 26', label: '13 POSITION PLAYERS · 13 PITCHERS', body: tbl(head('ACTIVE'), act, 'Active roster') })}
 <div class="roster-side">${win({ id: 'w-res', title: 'Reserves', label: `${team.playerIds.length - active.size} ON THE 40, NOT ACTIVE`, body: res ? tbl(head('RESERVE'), res, 'Reserves') : '<p class="note muted">Nobody on the reserves.</p>' })}
-${prospectsWin}
-${win({ id: 'w-waive', title: 'Waiver Wire', label: `${g.league.waivers.length} PLAYERS · WORST RECORD CLAIMS FIRST`, body: waivers ? tbl(head('PLAYER').replace('OPTIONS', 'FROM'), waivers, 'Waivers') : '<p class="note muted">Nobody on waivers.</p>' })}
-${win({ id: 'w-fa', title: 'Free Agents', label: room ? 'SIGN TO THE RESERVES' : 'YOUR 40 IS FULL', body: tbl(head('FREE AGENT'), fas, 'Free agents') })}</div>`;
+<p class="note small muted">Waivers, free agents and prospects are on the Transactions screen.</p></div>`;
   }
   const rs = g.season.standings.get(teamId)!;
+  if (txn) return page(app, 'transactions', `<div class="roster-head"><div><h2 class="page-h">Transactions</h2><p class="page-sub">${esc(teamFull(teamId))} · ${rs.W}-${rs.L}</p></div></div><div class="fill roster-fill">${body}</div>`);
   return page(app, 'roster', `<div class="roster-head"><div><h2 class="page-h">${esc(teamFull(teamId))}</h2><p class="page-sub">${rs.W}-${rs.L} · ${LEAGUES[team.conference]} ${DIVISIONS[team.division]} · ${team.strategy.rotationSize}-man rotation</p></div><div class="tabs" role="group" aria-label="Roster views">${tabs}</div>${sel}</div>
 <div class="fill roster-fill">${body}</div>`, true);
 }

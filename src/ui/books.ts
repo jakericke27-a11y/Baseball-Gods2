@@ -158,6 +158,12 @@ export interface BookPage {
   html?: string;
   empty?: string; note?: string;
   blank?: boolean;
+  /** Start on a left-hand page (so this page and the next share a spread). */
+  left?: boolean;
+  /** Rows this page is laid out for, when it isn't the book's usual (the franchises squeeze 15 in). */
+  per?: number;
+  /** An extra class on the table (bk-split6: a rule before the seventh column). */
+  cls?: string;
 }
 export interface Book { id: BookId; title: string; tabs: Array<{ tab: string; page: number }>; pages: BookPage[] }
 
@@ -301,11 +307,15 @@ function teamBook(g: Game, team: number, per: number): BookPage[] {
     [...ser].reverse().map(({ y, s }) => { const opp = s.high === team ? s.low : s.high, w = s.wins[s.high === team ? 0 : 1], l = s.wins[s.high === team ? 1 : 0];
       return { cells: [yearLabel(y), s.round === 'WS' ? 'Final' : s.round, `${teamChip(opp)}${esc(teamName(opp))}`, `<span class="${s.winner === team ? 'pos' : 'neg'}">${s.winner === team ? 'Won' : 'Lost'} ${w}-${l}</span>`] }; }), per,
     { empty: 'No postseason series yet.' }));
-  pages.push(...run('HISTORY', 'Team Batting by Year', [['YEAR', '64px'], ['AVG', '64px'], ['OBP', '64px'], ['SLG', '64px'], ['HR', '56px'], ['R', '56px'], ['SB', '56px']],
-    [...tys].reverse().map(({ y }) => { const b = teamLines(y, team).bat; return { cells: b ? [yearLabel(y), rate3(avg(b)), rate3(obp(b)), rate3(slg(b)), String(b.HR), String(b.R), String(b.SB)] : [yearLabel(y), '—', '—', '—', '—', '—', '—'] }; }), per,
-    { note: 'Players count for the team they finished the season with.' }));
-  pages.push(...run('HISTORY', 'Team Pitching by Year', [['YEAR', '64px'], ['ERA', '64px'], ['RA/9', '64px'], ['SO', '60px'], ['BB', '60px'], ['HR', '56px'], ['SV', '56px']],
-    [...tys].reverse().map(({ y }) => { const p = teamLines(y, team).pit; return { cells: p ? [yearLabel(y), era2((27 * p.ER) / Math.max(1, p.outs)), era2((27 * p.R) / Math.max(1, p.outs)), String(p.K), String(p.BB), String(p.HR), String(p.SV)] : [yearLabel(y), '—', '—', '—', '—', '—', '—'] }; }), per));
+  // batting and pitching on one row a year (the year once): AVG OBP SLG HR SB | ERA WHIP SO BB SV
+  const tcol = 'minmax(0, 1fr)';
+  pages.push(...run('HISTORY', 'Team Stats by Year', [['YEAR', '56px'], ['AVG', tcol], ['OBP', tcol], ['SLG', tcol], ['HR', tcol], ['SB', tcol], ['ERA', tcol], ['WHIP', tcol], ['SO', tcol], ['BB', tcol], ['SV', tcol]],
+    [...tys].reverse().map(({ y }) => {
+      const { bat: b, pit: p } = teamLines(y, team);
+      const bc = b ? [rate3(avg(b)), rate3(obp(b)), rate3(slg(b)), String(b.HR), String(b.SB)] : ['—', '—', '—', '—', '—'];
+      const pc = p ? [era2((27 * p.ER) / Math.max(1, p.outs)), ((3 * (p.BB + p.H)) / Math.max(1, p.outs)).toFixed(2), String(p.K), String(p.BB), String(p.SV)] : ['—', '—', '—', '—', '—'];
+      return { cells: [yearLabel(y), ...bc, ...pc] };
+    }), per, { sub: 'BATTING · PITCHING', cls: 'bk-split6', note: 'Players count for the team they finished the season with.' }));
   // PLAYERS
   const withTeam = new Map<number, { value: number; seasons: number; first: number; last: number }>();
   for (const y of Y) {
@@ -326,9 +336,9 @@ function teamBook(g: Game, team: number, per: number): BookPage[] {
     { empty: 'No legends yet. The honor roll in the League Records fills as great careers end.' }));
   pages.push({ tab: 'PLAYERS', title: 'Awards', html: '<p class="bk-empty">Awards and voting arrive with the value stat (step 3.6): MVP, Cy Young, Rookie of the Year, Gold Gloves and the rest. Every award your players win will be counted here.</p>' });
   // BATTING, PITCHING, SEASONS, GAMES
-  for (const k of BOOK_BAT) pages.push({ tab: 'BATTING', title: catBy(k).label, sub: `CAREER WITH ${teamName(team).toUpperCase()}`, cols: withStat(LEAD_COLS, k), rows: careerBoard(g, catBy(k), per, team), empty: 'Nobody qualifies yet.' });
-  for (const k of BOOK_PIT) pages.push({ tab: 'PITCHING', title: catBy(k).label, sub: `CAREER WITH ${teamName(team).toUpperCase()}`, cols: withStat(LEAD_COLS, k), rows: careerBoard(g, catBy(k), per, team), empty: 'Nobody qualifies yet.' });
-  for (const k of SEASON_CATS) pages.push({ tab: 'SEASONS', title: catBy(k).label, sub: 'BEST SEASONS FOR THE TEAM', cols: withStat(SEASON_COLS, k), rows: seasonBoard(g, catBy(k), per, team), empty: 'No qualified seasons yet.' });
+  for (const k of BOOK_BAT) pages.push({ tab: 'CAREER BATTING', title: catBy(k).label, sub: `CAREER WITH ${teamName(team).toUpperCase()}`, cols: withStat(LEAD_COLS, k), rows: careerBoard(g, catBy(k), per, team), empty: 'Nobody qualifies yet.' });
+  for (const k of BOOK_PIT) pages.push({ tab: 'CAREER PITCHING', title: catBy(k).label, sub: `CAREER WITH ${teamName(team).toUpperCase()}`, cols: withStat(LEAD_COLS, k), rows: careerBoard(g, catBy(k), per, team), empty: 'Nobody qualifies yet.' });
+  for (const k of SEASON_CATS) pages.push({ tab: 'SEASON RECORDS', title: catBy(k).label, sub: 'BEST SEASONS FOR THE TEAM', cols: withStat(SEASON_COLS, k), rows: seasonBoard(g, catBy(k), per, team), empty: 'No qualified seasons yet.' });
   const games = Y.flatMap((y) => y.games().filter((r) => r[1] === team || r[2] === team).map((row) => ({ row, y }))).sort((a, b) => byDrama(a.row, b.row) || b.y.year - a.y.year);
   pages.push({ tab: 'GAMES', title: 'Greatest Games', sub: 'BY DRAMA', cols: GAME_COLS, rows: gameRows(g, games, per, team), empty: 'No games yet.', note: g.league.history.some((y) => !y.games) ? 'Seasons before this book was started kept no game logs.' : 'Drama: how hard the win probability swung, 0 to 100.' });
   return pages;
@@ -368,21 +378,25 @@ function leagueBook(g: Game, per: number): BookPage[] {
     const W = rows.reduce((a, r) => a + r.W, 0), L = rows.reduce((a, r) => a + r.L, 0);
     return { id: t.id, W, L, apps: done.filter((y) => y.teams.find((x) => x.teamId === t.id)!.seed > 0).length, pen: done.filter((y) => y.series.some((s) => s.round === 'LCS' && s.winner === t.id)).length, ti: titles.get(t.id) ?? 0 };
   }).sort((a, b) => b.ti - a.ti || b.pen - a.pen || b.W / Math.max(1, b.W + b.L) - a.W / Math.max(1, a.W + a.L));
-  pages.push(...run('HISTORY', 'The Franchises', [['#', '36px'], ['TEAM', 'minmax(0, 1fr)'], ['W-L', '96px'], ['PCT', '60px'], ['PO', '44px'], ['PEN', '48px'], ['WON', '48px']],
-    fr.map((x, i) => ({ cells: [rank(i), `${teamChip(x.id)}${esc(teamName(x.id))}`, `${x.W}-${x.L}`, pctOf(x.W, x.L), String(x.apps), String(x.pen), `<b>${x.ti}</b>`], mine: x.id === g.userTeam })), per,
-    { note: 'PO playoff appearances, PEN pennants, WON titles.' }));
+  // all 30 on one spread: 15 a page, starting on a left page
+  const fper = Math.max(per, Math.ceil(fr.length / 2));
+  const franchise = run('HISTORY', 'The Franchises', [['#', '36px'], ['TEAM', 'minmax(0, 1fr)'], ['W-L', '96px'], ['PCT', '60px'], ['PO', '44px'], ['PEN', '48px'], ['WON', '48px']],
+    fr.map((x, i) => ({ cells: [rank(i), `${teamChip(x.id)}${esc(teamName(x.id))}`, `${x.W}-${x.L}`, pctOf(x.W, x.L), String(x.apps), String(x.pen), `<b>${x.ti}</b>`], mine: x.id === g.userTeam })), fper,
+    { note: 'PO playoff appearances, PEN pennants, WON titles.', per: fper });
+  franchise[0].left = true;
+  pages.push(...franchise);
   // LEGENDS
   pages.push(...run('LEGENDS', 'The Honor Roll', [['PLAYER', 'minmax(0, 1fr)'], ['CAREER', '104px'], ['WHY', 'minmax(0, 1fr)']],
     H.map((h) => ({ cells: [who(g, h.c.id), span(h.c.first, h.c.last), `<span class="small">${esc(h.why)}</span>`] })), per,
     { empty: 'Nobody yet. Retired players join with a career value of 45 or a milestone (500 HR, 3,000 hits, 300 wins, 3,000 strikeouts).', note: 'Stands in for the Hall of Fame (step 3.7) and Living Legends (3.8).' }));
-  pages.push({ tab: 'LEGENDS', title: 'Greatest Careers', sub: 'CAREER VALUE', cols: [['#', '36px'], ['PLAYER', 'minmax(0, 1fr)'], ['YEARS', '96px'], ['VALUE', '72px']],
+  pages.push({ tab: 'LEGENDS', left: true, title: 'Greatest Careers', sub: 'CAREER VALUE', cols: [['#', '36px'], ['PLAYER', 'minmax(0, 1fr)'], ['YEARS', '96px'], ['VALUE', '72px']],
     rows: [...C].sort((a, b) => b.value - a.value).slice(0, per).map((c, i) => ({ cells: [rank(i), `${who(g, c.id)}${isRetired(g, c.id) ? ' <span class="muted small">ret.</span>' : ''}`, span(c.first, c.last), `<b>${v1(c.value)}</b>`], mine: mineId(g, c.id) })),
     note: 'VALUE is interim: batting and pitching runs above replacement, in wins. No fielding until step 3.6.' });
   pages.push({ tab: 'LEGENDS', title: 'Greatest Seasons', sub: 'SINGLE-SEASON VALUE', cols: SEASON_COLS.map(([l, w], i) => [i === 3 ? 'VALUE' : l, w]),
     rows: [...seasonValues(g)].sort((a, b) => b.value - a.value).slice(0, per).map((v, i) => ({ cells: [rank(i), who(g, v.id, v.team), `Y${v.year}${v.live ? '*' : ''}`, `<b>${v1(v.value)}</b>`], mine: v.team === g.userTeam && mineId(g, v.id) })) });
-  for (const k of BOOK_BAT) pages.push({ tab: 'BATTING', title: catBy(k).label, sub: 'CAREER LEADERS', cols: withStat(LEAD_COLS, k), rows: careerBoard(g, catBy(k), per), empty: 'Nobody qualifies yet.' });
-  for (const k of BOOK_PIT) pages.push({ tab: 'PITCHING', title: catBy(k).label, sub: 'CAREER LEADERS', cols: withStat(LEAD_COLS, k), rows: careerBoard(g, catBy(k), per), empty: 'Nobody qualifies yet.' });
-  for (const k of SEASON_CATS) pages.push({ tab: 'SEASONS', title: catBy(k).label, sub: 'SINGLE-SEASON RECORDS', cols: withStat(SEASON_COLS, k), rows: seasonBoard(g, catBy(k), per), empty: 'No qualified seasons yet.' });
+  for (const k of BOOK_BAT) pages.push({ tab: 'CAREER BATTING', title: catBy(k).label, sub: 'CAREER LEADERS', cols: withStat(LEAD_COLS, k), rows: careerBoard(g, catBy(k), per), empty: 'Nobody qualifies yet.' });
+  for (const k of BOOK_PIT) pages.push({ tab: 'CAREER PITCHING', title: catBy(k).label, sub: 'CAREER LEADERS', cols: withStat(LEAD_COLS, k), rows: careerBoard(g, catBy(k), per), empty: 'Nobody qualifies yet.' });
+  for (const k of SEASON_CATS) pages.push({ tab: 'SEASON RECORDS', title: catBy(k).label, sub: 'SINGLE-SEASON RECORDS', cols: withStat(SEASON_COLS, k), rows: seasonBoard(g, catBy(k), per), empty: 'No qualified seasons yet.' });
   const gs = Y.flatMap((y) => y.games().map((row) => ({ row, y }))).sort((a, b) => byDrama(a.row, b.row) || b.y.year - a.y.year);
   pages.push({ tab: 'GAMES', title: 'Greatest Games', sub: 'BY DRAMA', cols: GAME_COLS, rows: gameRows(g, gs, per), empty: 'No games yet.' });
   // ERAS: by year, or by decade once the years don't fit a page
@@ -417,7 +431,7 @@ function leagueBook(g: Game, per: number): BookPage[] {
   for (const [title, grp] of groupsOf) {
     const defs = SPLIT_DEFS.filter((d) => grp.includes(d.group) && (all[d.key]?.[0] || now?.[d.key]?.[0]));
     const cols: Array<[string, string]> = [['SPLIT', 'minmax(0, 1fr)'], ['PA', '96px'], ['AVG', '60px'], ['OBP', '60px'], ['SLG', '60px'], ['HR%', '56px'], ['K%', '56px']];
-    if (now) pages.push(...run('SPLITS', title, cols, defs.map((d) => ({ cells: cells(esc(d.label), now[d.key]) })), per, { sub: `LEAGUE BATTING · YEAR ${cur!.year}` }));
+    if (now) pages.push(...run('SPLITS', title, cols, defs.map((d) => ({ cells: cells(esc(d.label), now[d.key]) })), per, { sub: 'LEAGUE BATTING · CURRENT SEASON' }));
     pages.push(...run('SPLITS', title, cols, defs.map((d) => ({ cells: cells(esc(d.label), all[d.key]) })), per,
       { sub: 'LEAGUE BATTING · ALL TIME', note: missing ? 'All time counts the seasons since the books began keeping splits.' : undefined }));
   }
@@ -438,7 +452,7 @@ export function buildBook(g: Game, id: BookId, team: number, per: number): Book 
     if (!tabs.length || tabs[tabs.length - 1].tab !== p.tab) {
       if (pages.length % 2) pages.push({ tab: pages[pages.length - 1].tab, title: '', blank: true });
       tabs.push({ tab: p.tab, page: pages.length });
-    }
+    } else if (p.left && pages.length % 2) pages.push({ tab: p.tab, title: '', blank: true });
     pages.push(p);
   }
   if (pages.length % 2) pages.push({ tab: pages[pages.length - 1].tab, title: '', blank: true });

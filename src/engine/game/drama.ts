@@ -11,6 +11,7 @@
  * which of your games make a decision card, and later which moments become minigames.
  */
 import { decodeEvents, type GameEvent } from './text';
+import { Play } from './types';
 
 // 2019 run expectancy and chance of scoring, by bases (bit 1 first, 2 second, 4 third) and outs.
 const RE: number[][] = [[0.50, 0.27, 0.10], [0.88, 0.52, 0.22], [1.12, 0.68, 0.32], [1.47, 0.91, 0.44], [1.36, 0.95, 0.37], [1.79, 1.14, 0.48], [2.00, 1.40, 0.57], [2.29, 1.53, 0.73]];
@@ -89,6 +90,8 @@ export interface Drama {
   /** The home team's win probability after every event, for a chart. */
   curve: number[];
   extra: boolean;
+  /** What broke the cap: "walk-off homer", "came back from 4 down", "pinch-hit homer"... (empty for most games). */
+  moments: string[];
 }
 
 const sdCache = new WeakMap<Uint8Array, Drama>();
@@ -102,15 +105,19 @@ export function gameDrama(log: Uint8Array, innings: number): Drama {
   const score = [0, 0];
   let wp = winProb(1, 0, 0, 0, 0);
   const curve = [wp];
-  let swing = 0, leadChanges = 0, lead = 0;
+  let swing = 0, leadChanges = 0, lead = 0, lateChanges = 0, minDiff = 0, maxDiff = 0;
   let biggest: DramaSwing | null = null;
+  const pinch = new Set<number>();
+  let phHomer = false, lastHalf = 0, lastInning = 0, diffBeforeLast = 0, lastHR = false, lastRuns = 0;
   const advance = (ev: GameEvent) => {
     if (ev.inning !== inning || ev.half !== half) { inning = ev.inning; half = ev.half; outs = 0; bases = 0; }
   };
   for (const ev of events) {
-    if (ev.type === 'change' || ev.type === 'sub') continue;
+    if (ev.type === 'sub') { if (ev.why === 'hitter') pinch.add(ev.incoming); continue; }
+    if (ev.type === 'change') continue;
     advance(ev);
     let runs = 0;
+    const diffBefore = score[1] - score[0];
     if (ev.type === 'pa') {
       runs = ev.runs;
       outs = ev.outsBefore;
@@ -141,15 +148,35 @@ export function gameDrama(log: Uint8Array, innings: number): Drama {
       swing += Math.abs(wp - before);
     }
     curve.push(wp);
-    const now = Math.sign(score[1] - score[0]);
-    if (now !== 0 && now !== lead) { if (lead !== 0) leadChanges++; lead = now; }
+    const d = score[1] - score[0], now = Math.sign(d);
+    minDiff = Math.min(minDiff, d); maxDiff = Math.max(maxDiff, d);
+    if (now !== 0 && now !== lead) { if (lead !== 0) { leadChanges++; if (inning >= 7) lateChanges++; } lead = now; }
+    if (runs) {
+      lastHalf = half; lastInning = inning; diffBeforeLast = diffBefore; lastRuns = runs;
+      lastHR = ev.type === 'pa' && ev.play === Play.HomeRun;
+      // a pinch hitter's homer that ties the game or takes the lead
+      if (lastHR && ev.type === 'pa' && pinch.has(ev.batter) && Math.sign(diffBefore) !== (half ? 1 : -1) && (d === 0 || Math.sign(d) === (half ? 1 : -1))) phHomer = true;
+    }
   }
   const extra = innings > 9;
   const big = biggest ? Math.abs(biggest.delta) : 0;
-  // Scale: a typical game ~40, about one in ten above 75 (see npm run drama).
-  const raw = 6 + 11 * swing + 30 * big + 4 * leadChanges + (extra ? 4 + 2 * Math.min(6, innings - 10) : 0);
-  const score100 = Math.max(0, Math.min(100, Math.round(raw)));
-  const out: Drama = { score: score100, swing, leadChanges, biggest, curve, extra };
+  // The base: how hard the game swung. A typical game ~40, about one in ten above 73; past 70 it bends toward a ceiling
+  // of 90, so no game reaches 100 on swing alone (see npm run drama).
+  const raw = 6 + 11 * swing + 30 * big + 4 * leadChanges;
+  const base = raw <= 70 ? raw : 70 + 20 * (1 - Math.exp(-(raw - 70) / 25));
+  // Breaking the cap takes a moment: a walk-off, extra innings, a big comeback, a pinch-hit homer, late lead changes.
+  const fin = score[1] - score[0];
+  const moments: string[] = [];
+  let bonus = 0;
+  const walkOff = fin > 0 && lastHalf === 1 && lastInning >= 9 && diffBeforeLast <= 0 && lastRuns > 0;
+  if (walkOff) { bonus += lastHR ? 6 : 4; moments.push(lastHR ? 'walk-off homer' : 'walk-off'); }
+  if (extra) { bonus += Math.min(6, 2 + (innings - 10)); moments.push(`${innings} innings`); }
+  const deficit = fin > 0 ? -minDiff : fin < 0 ? maxDiff : 0;
+  if (deficit >= 4) { bonus += deficit >= 6 ? 5 : 3; moments.push(`came back from ${deficit} down`); }
+  if (phHomer) { bonus += 3; moments.push('pinch-hit homer'); }
+  if (lateChanges) { bonus += Math.min(3, lateChanges); if (lateChanges >= 2) moments.push(`${lateChanges} late lead changes`); }
+  const score100 = Math.max(0, Math.min(100, Math.round(base + bonus)));
+  const out: Drama = { score: score100, swing, leadChanges, biggest, curve, extra, moments };
   sdCache.set(log, out);
   return out;
 }

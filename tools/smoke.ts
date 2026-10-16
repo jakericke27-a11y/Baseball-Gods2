@@ -90,7 +90,7 @@ async function main() {
   await click('[data-act="w-box"]');
   ok(app().screen === 'games' && doc.querySelectorAll('.w-boxscore table.stat').length === 4, 'box score shows batting and pitching for both teams');
 
-  for (const to of ['standings', 'games', 'storylines', 'records', 'roster', 'home']) {
+  for (const to of ['standings', 'games', 'storylines', 'records', 'roster', 'transactions', 'home']) {
     await click(`.nav [data-act="go"][data-to="${to}"]`);
     ok(app().screen === to && doc.querySelector('main'), `screen ${to} renders`);
   }
@@ -124,8 +124,8 @@ async function main() {
   await click('[data-act="sim-month"]');
   await click('.nav [data-act="go"][data-to="storylines"]');
   await click('[data-act="lead"][data-k="view"][data-v="race"]');
-  ok(doc.querySelectorAll('.w-race-0, #w-race-0-t').length && doc.querySelectorAll('[aria-label$="playoff race"] .trow').length >= 10, 'races show both leagues\' playoff race');
-  ok(/%/.test(text('#main')) && /M\d+/.test(text('#main')), 'the race has odds and magic numbers');
+  ok(doc.querySelector('#w-race-0-t') && doc.querySelector('#w-race-1-t') && doc.querySelectorAll('[aria-label$=" race"] .trow').length >= 10, 'THE RACE: both leagues\' open races');
+  ok(/%/.test(text('#main')) && /[ME]\d+/.test(text('#main')) && doc.querySelector('.rc-story'), 'the open races have odds, magic numbers and a line of story');
   ok(!doc.querySelector('.race-list') && doc.querySelector('.page-fixed'), 'THE RACE is the playoff race alone, fitted to the screen');
   await click('[data-act="lead"][data-k="view"][data-v="leaders"]');
   ok(doc.querySelectorAll('.cards .lead-list').length >= 10 && doc.querySelector('.lead-list .tchip'), 'Leaders: hitting cards for this year, with team colors');
@@ -136,7 +136,8 @@ async function main() {
   ok(lgA, 'League A only: every leader plays in League A');
   await click('[data-act="lead"][data-k="view"][data-v="lraces"]');
   ok(doc.querySelectorAll('.race-list li').length >= 3, 'pitching races in League A');
-  await click('[data-act="lead"][data-k="view"][data-v="form"]');
+  await click('[data-act="lead"][data-k="view"][data-v="hot"]');
+  ok(doc.querySelector('#w-hot-t') && doc.querySelector('#w-not-t') && doc.querySelectorAll('.hn-sec').length === 9, "WHO'S HOT, WHO'S NOT: teams, bats, arms and streaks in two halves");
   await click('[data-act="form-days"][data-days="7"]');
   ok(app().formDays === 7 && text('#main').includes('LAST 7 DAYS'), 'hot and cold switch to the last 7 days');
   await click('[data-act="lead"][data-k="view"][data-v="big"]');
@@ -150,9 +151,9 @@ async function main() {
   ok(doc.querySelector('.book') && doc.querySelectorAll('.bk-spread > .bk-page').length === 2 && /Record Book/.test(text('.bk-page')), 'Book 1 opens on its title page and contents');
   await click('[data-act="book-flip"][data-dir="1"]');
   ok(doc.querySelector('.bk-leaf.fwd') && text('.bk-spread > .bk-page').includes('Year by Year'), 'a page turns (with the leaf), to the year by year');
-  const bat = [...doc.querySelectorAll('.bk-ribbon')].find((b) => b.textContent === 'BATTING') as HTMLElement;
+  const bat = [...doc.querySelectorAll('.bk-ribbon')].find((b) => b.textContent === 'CAREER BATTING') as HTMLElement;
   await click(`.bk-ribbon[data-page="${bat.dataset.page}"]`);
-  ok(doc.querySelectorAll('.bk-spread > .bk-page .bk-row:not(.bk-th)').length >= 2 && /Hits/.test(text('.bk-spread')), 'the BATTING ribbon jumps to the franchise hits leaders, counting this season');
+  ok(doc.querySelectorAll('.bk-spread > .bk-page .bk-row:not(.bk-th)').length >= 2 && /Hits/.test(text('.bk-spread')), 'the CAREER BATTING ribbon jumps to the franchise hits leaders, counting this season');
   doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })); await sleep(5);
   ok(Number(bat.dataset.page) + 2 === app().book.at.team, 'the arrow key turns the page');
   doc.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await sleep(5);
@@ -176,7 +177,15 @@ async function main() {
   ok(app().game.over && champ && text('.banner-sub').includes('COMPLETE') && text('.banner-sub').includes('GALAXY SERIES'), 'sim to end finishes the postseason with a champion');
   ok(app().game.headlines.some((h: any) => h.text.includes('WIN THE GALAXY SERIES')), 'the champion makes the headlines');
   await click('.nav [data-act="go"][data-to="standings"]');
-  ok(doc.querySelectorAll('.w-bracket.wide .br-series').length === 9, 'standings show the full bracket: 9 series');
+  ok(doc.querySelectorAll('#main [id^="w-st-"]').length === 6 && !doc.querySelector('.w-bracket'), 'standings open on the six divisions');
+  await click('[data-act="stand-stat"][data-v="hitting"]');
+  ok(doc.querySelectorAll('.rank-t .trow').length === 30 && doc.querySelector('.rank-t sup.rk') && /OPS/.test(text('#main')), 'division view by hitting: team stats ranked across the majors');
+  await click('[data-act="stand-stat"][data-v="pitching"]');
+  ok(/ERA/.test(text('.rank-t')) && /WHIP/.test(text('.rank-t')), 'and by pitching');
+  await click('[data-act="stand-stat"][data-v="record"]');
+  await click('[data-act="stand-tab"][data-v="playoffs"]');
+  ok(doc.querySelectorAll('.w-bracket.wide .br-series').length === 9 && doc.querySelector('#w-wc-0-t'), 'PLAYOFF PICTURE: the full bracket (9 series) and the wild card');
+  await click('[data-act="stand-tab"][data-v="division"]');
   await click('.nav [data-act="go"][data-to="home"]');
   const before = JSON.stringify([...app().game.season.standings.values()].map((x: any) => [x.teamId, x.W, x.L, x.RS, x.RA]));
   const hl = app().game.headlines.length;
@@ -319,8 +328,8 @@ async function main() {
   const career = [...doc.querySelectorAll('.modal [aria-label="Career batting"] .trow')].map((r) => r.textContent);
   ok(career.length === 3 && career[0]!.startsWith('1') && career[2]!.startsWith('CAREER') && doc.querySelector('.modal details.pc-career:not([open])'), `a veteran's card folds his career away: ${career.length} rows`);
   await click('[data-act="close"]');
-  await click('.nav [data-act="go"][data-to="standings"]');
-  ok(doc.querySelectorAll('.past-list li').length === 1, 'standings list the past season and its champion');
+  await click('.nav [data-act="go"][data-to="transactions"]');
+  ok(app().screen === 'transactions' && doc.querySelector('#w-waive-t') && doc.querySelector('#w-fa-t') && doc.querySelector('#w-prospects-t'), 'Transactions: the waiver wire, free agents and prospects');
 
   // The founding draft, by hand
   app().screen = 'title'; app().titleStage = 'menu'; app().render();

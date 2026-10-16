@@ -97,7 +97,7 @@ function back(app: App, g: Game, id: number, ctx: string): string {
   const head = `<tr><th scope="col" class="l">SPLIT</th>${cols.map(([k, h]) => `<th scope="col"><button type="button" class="sort${v.sort === k ? ' on' : ''}" data-act="split-sort" data-k="${k}" data-key="split-sort:${ctx}:${k}">${h}${v.sort === k ? (v.desc ? '▾' : '▴') : ''}</button></th>`).join('')}</tr>`;
   const body = rows.map((l) => `<tr${l.key === 'all' ? ' class="tot"' : ''}><th scope="row">${esc(l.label)}</th>${cols.map(([, , f, fmt]) => `<td>${l.PA ? fmt(f(l)) : '—'}</td>`).join('')}</tr>`).join('');
   const tabs = groups.map(([k, t]) => `<button type="button" class="bc-tab${v.group === k ? ' on' : ''}" data-act="split-group" data-g="${k}" data-key="split-group:${ctx}:${k}" aria-pressed="${v.group === k}">${t}</button>`).join('');
-  return `<div class="bc-back-head">${esc(p.name)}<span>${isP ? 'HITTERS AGAINST HIM' : 'SPLITS'} · YEAR ${g.year}</span></div>
+  return `<div class="bc-back-head">${esc(p.name)}<span>${isP ? 'HITTERS AGAINST HIM' : 'SPLITS'} · SEASON</span></div>
 <div class="bc-tabs" role="group" aria-label="Split groups">${tabs}</div>
 <div class="bc-table"><table class="bc-splits">${head}${body}</table></div>`;
 }

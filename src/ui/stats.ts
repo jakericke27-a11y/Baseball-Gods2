@@ -1,5 +1,5 @@
 /** Derived numbers for the screens: rates, leaderboards, races, streak heat. */
-import type { BatLine, PitchLine } from '../engine/game/types';
+import { newBatLine, newPitchLine, type BatLine, type PitchLine } from '../engine/game/types';
 import { divisionStandings, type DivisionTable, type StandingRow } from '../engine/season/season';
 import type { Game } from './state';
 
@@ -40,17 +40,19 @@ export const streakTone = (r: StandingRow) => tone(streakText(r), Math.abs(r.str
 /** Last ten, colored at 7-3 and 3-7. */
 export const last10Tone = (r: StandingRow) => { const w = r.last10.reduce((a, b) => a + b, 0); return tone(last10(r), r.last10.length < 10 ? 0 : w >= 7 ? 1 : w <= 3 ? -1 : 0); };
 
-/** Streak heat: +1..+3 hot (flames), -1..-3 cold (ice), 0 neither. Last-10 counts only once 10 games exist. */
+/**
+ * Streak heat: +1..+3 hot (flames), -1..-3 cold (ice), 0 neither. Two signals: the streak (3, 5, 7 wins; 4, 5, 7
+ * losses) and the last ten (7, 8, 9 wins; 3, 2, 1), once ten games exist. When they agree the stronger one counts;
+ * when they pull against each other they cancel, so W2 on a 2-8 run is a cool -1, not -2, and W3 on 3-7 is nothing.
+ */
 export function heat(r: StandingRow): number {
   const full = r.last10.length === 10;
   const w = r.last10.reduce((a, b) => a + b, 0);
-  if (r.streak >= 7 || (full && w >= 9)) return 3;
-  if (r.streak >= 5 || (full && w >= 8)) return 2;
-  if (r.streak >= 3 || (full && w >= 7)) return 1;
-  if (r.streak <= -7 || (full && w <= 1)) return -3;
-  if (r.streak <= -5 || (full && w <= 2)) return -2;
-  if (r.streak <= -4 || (full && w <= 3)) return -1;
-  return 0;
+  const s = r.streak, a = Math.abs(s);
+  const streak = s > 0 ? (a >= 7 ? 3 : a >= 5 ? 2 : a >= 3 ? 1 : 0.5) : s < 0 ? -(a >= 7 ? 3 : a >= 5 ? 2 : a >= 4 ? 1 : 0.5) : 0;
+  const form = !full ? 0 : w >= 9 ? 3 : w >= 8 ? 2 : w >= 7 ? 1 : w <= 1 ? -3 : w <= 2 ? -2 : w <= 3 ? -1 : 0;
+  const v = Math.sign(streak) === Math.sign(form) || !form || !streak ? (Math.abs(streak) >= Math.abs(form) ? streak : form) : streak + form;
+  return Math.trunc(v);
 }
 
 export interface LeagueRace {
@@ -138,4 +140,27 @@ export function leaders(g: Game, key: string, n = 5): Leader[] {
     }
   }
   return out.sort((a, b) => b.value - a.value || a.id - b.id).slice(0, n);
+}
+
+export interface TeamTotals { G: number; bat: BatLine; pit: PitchLine }
+const totalsCache = new WeakMap<object, { n: number; m: Map<number, TeamTotals> }>();
+/** Every team's season totals, regular season, from the games themselves (so a traded player counts for each team he played for). */
+export function teamTotals(g: Game): Map<number, TeamTotals> {
+  const s = g.season, hit = totalsCache.get(s);
+  if (hit && hit.n === s.results.length) return hit.m;
+  const m = new Map<number, TeamTotals>(g.league.teams.map((t) => [t.id, { G: 0, bat: newBatLine(), pit: newPitchLine() }]));
+  const add = <T extends object>(into: T, l: T) => { for (const k in l) (into as Record<string, number>)[k] += (l as Record<string, number>)[k]; };
+  for (const r of s.results) {
+    if (r.kind === 'post') continue;
+    for (const side of [0, 1] as const) {
+      const t = m.get(r.teamIds[side]);
+      if (!t) continue;
+      t.G++;
+      const ids = new Set([...r.lineups[side].map((x) => x.player.id), ...(r.subs ?? []).filter((x) => x.side === side).map((x) => x.incoming)]);
+      for (const id of ids) { const l = r.batting.get(id); if (l) add(t.bat, l); }
+      for (const id of r.pitchersUsed[side]) { const l = r.pitching.get(id); if (l) add(t.pit, l); }
+    }
+  }
+  totalsCache.set(s, { n: s.results.length, m });
+  return m;
 }

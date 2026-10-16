@@ -11,6 +11,7 @@ import { newBoardState, type BoardState } from './views/board';
 import { DRAFT_SPEEDS } from './views/draft';
 import { gameDays } from './views/screens';
 import type { LeadState } from './views/storylines';
+import type { StandStat, StandTab } from './views/screens';
 import { BOOK_ROW_MIN, currentBook, newBookState, type BookState } from './views/records';
 import type { PitchDetail } from '../engine/game/text';
 import { regularOver } from '../engine/season/season';
@@ -31,7 +32,7 @@ import { SLOT, deleteLeague, getLeague, putLeague, requestPersistence } from './
 import { applyTeamColors, teamColors, teamName } from './teams';
 import { view } from './views';
 
-export type Screen = 'title' | 'picker' | 'draft' | 'home' | 'watch' | 'standings' | 'games' | 'leaders' | 'races' | 'scouting' | 'roster' | 'gamelog' | 'news' | 'offseason' | 'desk' | 'storylines' | 'records';
+export type Screen = 'title' | 'picker' | 'draft' | 'home' | 'watch' | 'standings' | 'games' | 'leaders' | 'races' | 'scouting' | 'roster' | 'gamelog' | 'news' | 'offseason' | 'desk' | 'storylines' | 'records' | 'transactions';
 export type Modal = { kind: 'settings' } | { kind: 'player'; id: number } | { kind: 'card'; id: number } | { kind: 'compare'; a: number; b: number } | { kind: 'landed'; titles: string[] } | { kind: 'password' } | { kind: 'restart' };
 /** Live games: who makes your team's moves. 'ask': the bench coach asks first; 'me': nothing moves unless you do;
  *  'ai': the bench coach decides and play flows (you can still step in). */
@@ -111,6 +112,9 @@ export class App {
   private draftTimer: ReturnType<typeof setTimeout> | null = null;
   /** The Leaders screen: which view and filters. */
   lead: LeadState = { view: 'race', scope: 'all', side: 'bat', when: 'season' };
+  /** Standings: divisions or the playoff picture, and what the division tables show. */
+  standTab: StandTab = 'division';
+  standStat: StandStat = 'record';
   /** The record books: which is open, at which page. */
   book: BookState = newBookState();
   /** The winter report: your team or the whole league. */
@@ -1078,6 +1082,8 @@ export class App {
       case 'games-pick': this.gamesPick = Number(d.index); this.render(); return;
       case 'log-pick': this.logPick = Number(d.index); this.render(); return;
       case 'lead': (this.lead as unknown as Record<string, string>)[d.k!] = d.v!; this.render(); return;
+      case 'stand-tab': this.standTab = d.v as StandTab; this.render(); return;
+      case 'stand-stat': this.standStat = d.v as StandStat; this.render(); return;
       case 'book-open': this.book.open = d.book as BookState['open']; this.book.from = null; this.render(); return;
       case 'book-close': this.book.open = null; this.render(); return;
       case 'book-flip': this.bookTurn(this.book.open ? this.book.at[this.book.open] + 2 * Number(d.dir) : 0); return;

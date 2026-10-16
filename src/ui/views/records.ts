@@ -49,7 +49,7 @@ function pageHtml(b: Book, p: BookPage | undefined, i: number, per: number, extr
     const cols = (p.cols ?? []).map(([, w]) => w).join(' ');
     const labels = p.cols?.some(([l]) => l) ? `<div class="bk-row bk-th" role="row">${p.cols!.map(([l]) => `<span role="columnheader">${esc(l)}</span>`).join('')}</div>` : '';
     const textLast = /fr\)?$/.test(p.cols?.at(-1)?.[1] ?? '') && (p.cols?.length ?? 0) > 1 && !/^(VALUE|[A-Z0-9%/]{1,5})$/.test(p.cols!.at(-1)![0]);
-    body = `<div class="bk-table${textLast ? ' text-last' : ''}" role="table" aria-label="${esc(p.title)}" style="--cols:${cols};--per:${per}">${labels}${p.rows.map((r) => `<div class="bk-row${r.mine ? ' mine' : ''}" role="row">${r.cells.map((c, k) => `<span role="${k ? 'cell' : 'rowheader'}">${c}</span>`).join('')}</div>`).join('')}</div>`;
+    body = `<div class="bk-table${textLast ? ' text-last' : ''}${p.cls ? ` ${p.cls}` : ''}" role="table" aria-label="${esc(p.title)}" style="--cols:${cols};--per:${p.per ?? per}">${labels}${p.rows.map((r) => `<div class="bk-row${r.mine ? ' mine' : ''}" role="row">${r.cells.map((c, k) => `<span role="${k ? 'cell' : 'rowheader'}">${c}</span>`).join('')}</div>`).join('')}</div>`;
   } else body = `<p class="bk-empty">${esc(p.empty ?? 'Nothing here yet.')}</p>`;
   return `<div class="bk-page bk-${side}">${head}<div class="bk-body">${body}</div>${p.note ? `<p class="bk-note">${esc(p.note)}</p>` : ''}${num}<span class="bk-tabname" aria-hidden="true">${esc(p.tab === 'CONTENTS' ? b.title.toUpperCase() : p.tab)}</span></div>`;
 }
@@ -74,7 +74,10 @@ function openBook(app: App, b: Book): string {
   }
   const tabAt = (k: number) => b.tabs.filter((t) => t.page <= k).at(-1)?.tab;
   const here = new Set([tabAt(at), tabAt(at + 1)]);
-  const ribbons = b.tabs.map((t, i) => `<button type="button" class="bk-ribbon r${i % 6}${here.has(t.tab) ? ' on' : ''}" data-act="book-tab" data-page="${t.page}" data-key="book-ribbon:${t.page}"${here.has(t.tab) ? ' aria-current="true"' : ''}>${t.tab === 'CONTENTS' ? '≡' : esc(t.tab)}</button>`).join('');
+  // ribbons for sections already passed sit over the left page; the ones still ahead over the right, as in a real book
+  const ribbon = (t: Book['tabs'][number], i: number) => `<button type="button" class="bk-ribbon r${i % 6}${here.has(t.tab) ? ' on' : ''}" data-act="book-tab" data-page="${t.page}" data-key="book-ribbon:${t.page}"${here.has(t.tab) ? ' aria-current="true"' : ''}>${t.tab === 'CONTENTS' ? '≡' : esc(t.tab)}</button>`;
+  const tabs = b.tabs.map((t, i) => ({ t, i }));
+  const ribbons = `<div class="bk-rib bk-rib-l">${tabs.filter((x) => x.t.page <= at + 1).map((x) => ribbon(x.t, x.i)).join('')}</div><div class="bk-rib bk-rib-r">${tabs.filter((x) => x.t.page > at + 1).map((x) => ribbon(x.t, x.i)).join('')}</div>`;
   const last = b.pages.length - 2;
   const bar = `<div class="bk-bar"><button type="button" class="btn btn-ghost bk-desk" data-act="book-close" data-key="book-close" title="Close the book (Esc)"><span>◂ DESK</span></button>
 <nav class="bk-ribbons" aria-label="${esc(b.title)} sections">${ribbons}</nav>

@@ -979,7 +979,7 @@ function stepFade(dt) {
   else if (!f.out && f.t >= f.dur) S.fade = null;
 }
 function fadeAlpha() { const f = S.fade; if (!f) return 0; return f.out ? clamp(f.t / f.dur, 0, 1) : clamp(1 - f.t / f.dur, 0, 1); }
-function onRoomChange() { save(); buildTags(); updateHud(); S.target = null; }
+function onRoomChange() { save(); buildTags(); updateHud(); S.target = null; setHover(null); }
 
 /* ================================================================ drawing */
 let buf = null, bctx = null, roomBg = null, roomBgDirty = true, zoom = 3, dpr = 1, viewW = 0, viewH = 0, lastDraw = 0, needDraw = true, hudPad = 0, hudCss = 0;
@@ -1138,7 +1138,7 @@ function buildDom() {
   elView.addEventListener('pointermove', onPointerMove);
   elView.addEventListener('pointerup', onPointerUp);
   elView.addEventListener('pointercancel', () => { S.steer = null; S.press = null; });
-  elView.addEventListener('pointerleave', () => { if (!S.press) setHover(null); });
+  elView.addEventListener('pointerleave', () => { ptr = null; if (!S.press) setHover(null); });
   elView.addEventListener('contextmenu', (e) => e.preventDefault());
   elView.addEventListener('click', onUiClick);
   elView.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); elView.classList.add('hub-drop'); } });
@@ -1569,6 +1569,15 @@ function pickAt(wx, wy) {
   return hits[0] || null;
 }
 function setHover(t) { if (S.hover !== t) { S.hover = t; elView.classList.toggle('pointing', !!t); } }
+// The hover is re-picked every frame from where the mouse is now (the camera scrolls and rooms change under a still
+// mouse), and dropped while you walk with the keys or the mouse is outside the view.
+let ptr = null;
+function refreshHover() {
+  if (!S.hover && !ptr) return;
+  if (!ptr || S.input === 'keys' || S.say || S.panel || S.fade || S.press) { setHover(null); return; }
+  const [wx, wy] = worldAt(ptr);
+  setHover(pickAt(wx, wy));
+}
 function onPointerDown(e) {
   if (e.target.closest('.hub-hud, .hub-say, .hub-veil')) return;
   menuClose();
@@ -1583,6 +1592,7 @@ function onPointerDown(e) {
 function onPointerMove(e) {
   if (!active()) return;
   const [wx, wy] = worldAt(e);
+  if (e.pointerType === 'mouse') { ptr = { clientX: e.clientX, clientY: e.clientY }; if (S.input === 'keys') S.input = 'pointer'; }
   if (!S.press) { if (e.pointerType === 'mouse' && !S.say && !S.panel) setHover(pickAt(wx, wy)); return; }
   const p = S.press;
   if (!p.drag && (Math.hypot(e.clientX - p.x, e.clientY - p.y) > 12 || performance.now() - p.t > 220)) { p.drag = true; stopPath(); }
@@ -1649,6 +1659,7 @@ function loop(t) {
   const dt = Math.min(0.05, Math.max(0, (t - (lastT || t)) / 1000)); lastT = t;
   try {
     update(dt);
+    refreshHover();
     const busy = S.p.moving || S.fade || S.path || S.steer || Math.abs(S.cam.x - Math.round(S.cam.x)) > 0 || needDraw;
     if (busy || t - lastDraw > 100) { draw(t); lastDraw = t; needDraw = false; }
     placeTags();
@@ -1701,6 +1712,9 @@ function fail(e) {
   const frame = document.querySelector('#app .frame.screen-home'); if (frame) frame.classList.remove('hub-on');
 }
 function onDocClick(e) {
+  // the footer's Home always means the dashboard; the walker on the ticker (or MENU) leads back to the clubhouse
+  const home = e.target.closest && e.target.closest('#app .footer [data-act="go"][data-to="home"]');
+  if (home && S.on) { S.on = false; save(); return; }
   const b = e.target.closest && e.target.closest('[data-hub-toggle]');
   if (!b) return;
   e.preventDefault(); e.stopPropagation();

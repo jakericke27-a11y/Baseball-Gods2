@@ -20,7 +20,11 @@ const games = s.results.filter((r) => r.log && r.kind !== 'post').map((r) => ({ 
 const sc = games.map((g) => g.d.score).sort((a, b) => a - b);
 const q = (p: number) => sc[Math.floor(p * (sc.length - 1))];
 console.log(`\n${games.length} games. Drama: 10th pct ${q(0.1)}, median ${q(0.5)}, 75th ${q(0.75)}, 90th ${q(0.9)}, 97th ${q(0.97)}, max ${q(1)}`);
+console.log(`At 100: ${sc.filter((x) => x >= 100).length} games; 95+: ${sc.filter((x) => x >= 95).length}; 90+: ${sc.filter((x) => x >= 90).length}`);
 console.log(`Card bar ${DRAMA_CARD}: ${(100 * sc.filter((x) => x >= DRAMA_CARD).length / sc.length).toFixed(1)}% of games, about ${(2 * 162 * sc.filter((x) => x >= DRAMA_CARD).length / sc.length / 2).toFixed(1)} a season for one team`);
+const moments = new Map<string, number>();
+for (const g of games) for (const m of g.d.moments) { const k = m.replace(/\d+ innings/, 'extra innings').replace(/\d+ down/, 'N down').replace(/\d+ late/, 'N late'); moments.set(k, (moments.get(k) ?? 0) + 1); }
+console.log(`Moments that break the cap: ${[...moments].map(([k, n]) => `${k} ${n}`).join(', ')}`);
 console.log('\nThe most dramatic:');
 for (const g of games.sort((a, b) => b.d.score - a.d.score).slice(0, 5))
-  console.log(`  ${g.d.score}  ${g.r.score[0]}-${g.r.score[1]}${g.r.innings > 9 ? ` (${g.r.innings})` : ''}  swing ${g.d.swing.toFixed(2)}, lead changes ${g.d.leadChanges}, biggest ${(100 * Math.abs(g.d.biggest?.delta ?? 0)).toFixed(0)}%`);
+  console.log(`  ${g.d.score}  ${g.r.score[0]}-${g.r.score[1]}${g.r.innings > 9 ? ` (${g.r.innings})` : ''}  swing ${g.d.swing.toFixed(2)}, lead changes ${g.d.leadChanges}, biggest ${(100 * Math.abs(g.d.biggest?.delta ?? 0)).toFixed(0)}%${g.d.moments.length ? ` · ${g.d.moments.join(', ')}` : ''}`);

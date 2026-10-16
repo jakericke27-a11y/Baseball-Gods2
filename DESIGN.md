@@ -408,6 +408,27 @@ New-engine guards: runs vs BaseRuns check, RBI ≤ R, per-team start limits by r
   game log). The old screen names still open their section. The Leaders RECORDS view is gone; the books replace it.
   The footer now runs Home, Standings, Games, Storylines, Records, Scouting, Roster, Desk; in the office the computer
   opens Storylines and the cabinet the books.
+- 2026-10-16 — Play notes, third round (part of step 2.10). **Home**: the footer's Home always opens the dashboard; the
+  walker on the ticker (or the clubhouse MENU) goes back to the clubhouse. **Clubhouse hover** is re-picked every frame
+  from where the mouse is now (the camera scrolls and rooms change under a still mouse) and dropped while you walk with
+  the keys, so a name no longer lingers. **Standings**: DIVISIONS (RECORD, or HITTING / PITCHING: team totals from the
+  games themselves, each with its rank in the majors, top and bottom five toned) and PLAYOFF PICTURE (the bracket in
+  October, the picture, the wild card). Past Seasons is gone from Standings (Book 2 has the champions). **Gazette**: THE
+  RACE shows only undecided races (each open division's teams still alive, the wild card while a spot is open), each
+  with a line of story, and the settled teams as IN and OUT lines; STREAKS and HOT & COLD became WHO'S HOT, WHO'S NOT
+  (two halves; teams, bats, arms and streaks in two columns each, one day-range switch); LEADERS is STAT LEADERS;
+  "Year N" as a stat header reads SEASON or CURRENT SEASON. **Heat** weighs the streak against the last ten: agreeing
+  signals take the stronger, opposing ones cancel (W2 on 2-8 is -1, W3 on 3-7 nothing). Flames and ice are drawn at 3px
+  a pixel, level 1 at half strength, and the outline sits 2px inside the row so neighbors read as separate boxes.
+  **Footer** icons 40px and buttons 40px tall. **Transactions** (footer): the waiver wire, free agents and prospects,
+  moved out of Roster's 26 & RESERVES. **Books**: ribbons for sections passed sit over the left page and the rest over
+  the right; BATTING, PITCHING, SEASONS are CAREER BATTING, CAREER PITCHING, SEASON RECORDS; team batting and pitching
+  by year share one table (AVG OBP SLG HR SB | ERA WHIP SO BB SV); the franchises fill one spread (15 a page); greatest
+  careers and seasons share a spread (`BookPage.left`, `BookPage.per`). **Drama**: the swing score bends toward 90 past
+  70 (70 + 20 × (1 − e^(−(raw − 70)/25))), and only moments break the cap: walk-off +4 (homer +6), extra innings
+  +2 and +1 an inning past 10 (up to 6), a comeback from 4 down +3 (6 down +5), a pinch hitter's tying or go-ahead
+  homer +3, late lead changes (7th on) +1 each up to 3. A season now has about 5 games at 100 (was 40) and 18 at 95+;
+  the card bar at 78 still catches ~7.5% of games. The moments show on the Drama tag and the box score.
 
 ## Design philosophy (2026-10-03)
 Realistic baseline; the fun is in finding combinations that BREAK it (ratings + abilities + favor +

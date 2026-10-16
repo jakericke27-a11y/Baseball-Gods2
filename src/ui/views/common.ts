@@ -80,7 +80,7 @@ export function banner(top: string, sub: string, compact = false): string {
 
 const NAV: Array<[IconName, string, string]> = [
   ['temple', 'Home', 'home'], ['pennant', 'Standings', 'standings'], ['ball', 'Games', 'games'], ['news', 'Storylines', 'storylines'], ['book', 'Records', 'records'], ['scope', 'Scouting', 'scouting'],
-  ['jersey', 'Roster', 'roster'], ['deck', 'Desk: decision cards and missions', 'desk'],
+  ['jersey', 'Roster', 'roster'], ['swap', 'Transactions: waivers, free agents, prospects', 'transactions'], ['deck', 'Desk: decision cards and missions', 'desk'],
 ];
 
 export function footer(current: string, actions: string): string {
@@ -97,7 +97,7 @@ export function dramaTag(r: GameResult): string {
   if (!r.log) return '';
   const d = gameDrama(r.log, r.innings);
   const tier = d.score >= 78 ? 'hot' : d.score >= 55 ? 'warm' : 'cool';
-  return `<span class="drama d-${tier}" title="Drama ${d.score}/100: how hard this game swung (${d.leadChanges} lead change${d.leadChanges === 1 ? '' : 's'})">DRAMA ${d.score}</span>`;
+  return `<span class="drama d-${tier}" title="Drama ${d.score}/100: how hard this game swung (${d.leadChanges} lead change${d.leadChanges === 1 ? '' : 's'}${d.moments.length ? `; ${esc(d.moments.join(', '))}` : ''})">DRAMA ${d.score}</span>`;
 }
 
 /** The game's story: the home team's win probability after every play, with the away side below the line. */
@@ -106,6 +106,6 @@ export function dramaStrip(r: GameResult, name: (id: number) => string): string 
   const d = gameDrama(r.log, r.innings), n = d.curve.length - 1 || 1;
   const pts = d.curve.map((p, i) => `${((i / n) * 300).toFixed(1)},${(60 - p * 60).toFixed(1)}`).join(' ');
   const big = d.biggest ? `Biggest swing: ${esc(name(d.biggest.batter))}, ${d.biggest.half ? 'bottom' : 'top'} of the ${ordinal(d.biggest.inning)} (${Math.round(100 * Math.abs(d.biggest.delta))}%)` : '';
-  return `<div class="drama-strip"><div class="ds-head">${dramaTag(r)}<span class="small muted">${esc(teamName(r.teamIds[1]))} win probability · ${big}</span></div>
+  return `<div class="drama-strip"><div class="ds-head">${dramaTag(r)}<span class="small muted">${esc(teamName(r.teamIds[1]))} win probability · ${big}${d.moments.length ? ` · ${esc(d.moments.join(', '))}` : ''}</span></div>
 <svg class="ds-curve" viewBox="0 0 300 60" preserveAspectRatio="none" aria-hidden="true"><line x1="0" y1="30" x2="300" y2="30" class="ds-mid"/><polyline points="${pts}" class="ds-line"/></svg></div>`;
 }

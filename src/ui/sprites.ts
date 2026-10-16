@@ -57,6 +57,7 @@ const GRIDS = {
   flag: ['wwwyywwyyw', 'wwwyywwyyw', 'wyywwyywwy', 'wyywwyywwy', 'wwwyywwyyw', 'wwwyywwyyw', 'w.........', 'w.........', 'w.........', 'w.........'],
   deck: ['..wwwwww..', '.w......w.', 'wwwwww..w.', 'w....w..w.', 'w.ww.w..w.', 'w....w..w.', 'w.ww.w.w..', 'w....ww...', 'w....w....', 'wwwwww....'],
   book: ['.www..www.', 'wpppwwpppw', 'wpddwwddpw', 'wpppwwpppw', 'wpddwwddpw', 'wpppwwpppw', 'wpddwwddpw', 'wpppwwpppw', 'wwwwwwwwww', '....ww....'],
+  swap: ['......w...', '......ww..', 'wwwwwwwww.', '......ww..', '......w...', '...w......', '..ww......', '.wwwwwwwww', '..ww......', '...w......'],
   note: ['...www', '...w.w', '...w.w', '...w..', '.www..', 'wwww..', '.ww...'],
 } as const;
 
@@ -89,8 +90,10 @@ export function streakCss(): string {
   const rules: string[] = [];
   for (let lvl = 1; lvl <= 3; lvl++) {
     const f = FLAME[lvl - 1], fb = FLAME_B[lvl - 1], ic = ICE[lvl - 1], ib = ICE_B[lvl - 1];
-    rules.push(`.hot-${lvl}{--strip-h:${f.length * 4}px;--strip:${svgUrl([...f, ...fb])}}`);
-    rules.push(`.cold-${lvl}{--strip-h:${ic.length * 4}px;--strip:${svgUrl([...ic, ...ib])}}`);
+    // drawn at 3px a pixel (36px a tile); a budding streak burns fainter than a raging one
+    const op = [0.5, 0.72, 0.92][lvl - 1];
+    rules.push(`.hot-${lvl}{--strip-h:${f.length * 3}px;--strip-o:${op};--strip:${svgUrl([...f, ...fb])}}`);
+    rules.push(`.cold-${lvl}{--strip-h:${ic.length * 3}px;--strip-o:${op};--strip:${svgUrl([...ic, ...ib])}}`);
   }
   rules.push(`:root{--ball:${BALL_URL}}`);
   return rules.join('\n');

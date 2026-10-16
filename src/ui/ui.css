@@ -52,7 +52,7 @@ svg.px { display: block; flex-shrink: 0; }
 
 #park { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%); image-rendering: pixelated; z-index: 0; pointer-events: none; }
 #app { position: relative; z-index: 1; height: 100%; }
-.frame { height: 100%; display: flex; flex-direction: column; gap: 12px; padding: 16px 24px 18px; }
+.frame { height: 100%; display: flex; flex-direction: column; gap: 10px; padding: 16px 24px 12px; }
 .main { flex: 1 1 auto; min-height: 0; min-width: 0; }
 .main.page { overflow-y: auto; overflow-x: hidden; margin: 0 -14px; padding: 14px 14px 22px; display: flex; flex-direction: column; gap: 24px; }
 .main.page > *, .league-col > *, .main.page .win { flex-shrink: 0; }
@@ -123,12 +123,16 @@ svg.px { display: block; flex-shrink: 0; }
 .trow > :first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .trow .link { font: var(--l-l)/1.1 var(--f-label); }
 /* fire and ice sit behind the text, inside a row of fixed height, so every row lines up; the text keeps a dark outline */
-.trow.hot { border-color: var(--fire); }
-.trow.cold { border-color: var(--ice); }
+/* the outline sits 2px inside the row, so two hot rows in a row read as two boxes, not one thick line */
+.trow.hot { outline: 4px solid var(--fire); outline-offset: -6px; }
+.trow.cold { outline: 4px solid var(--ice); outline-offset: -6px; }
+.trow.hot.hot-1 { outline-color: color-mix(in srgb, var(--fire) 70%, transparent); }
+.trow.cold.cold-1 { outline-color: color-mix(in srgb, var(--ice) 70%, transparent); }
 .trow.hot > *, .trow.cold > * { text-shadow: 2px 0 0 var(--night), -2px 0 0 var(--night), 0 2px 0 var(--night), 0 -2px 0 var(--night); }
-.trow.hot::after, .trow.cold::after { content: ''; position: absolute; z-index: 0; left: 0; right: 0; height: var(--strip-h); background-image: var(--strip); background-repeat: repeat-x; background-size: 48px calc(var(--strip-h) * 2); image-rendering: pixelated; pointer-events: none; opacity: 0.9; animation: flicker 0.6s steps(1) infinite; }
-.trow.hot::after { bottom: 0; }
-.trow.cold::after { top: 0; animation-duration: 1.6s; }
+.trow.hot::after, .trow.cold::after { content: ''; position: absolute; z-index: 0; left: 0; right: 0; height: var(--strip-h); background-image: var(--strip); background-repeat: repeat-x; background-size: 36px calc(var(--strip-h) * 2); image-rendering: pixelated; pointer-events: none; opacity: var(--strip-o, 0.9); animation: flicker 0.6s steps(1) infinite; }
+.trow.hot::after, .trow.cold::after { left: 2px; right: 2px; }
+.trow.hot::after { bottom: 2px; }
+.trow.cold::after { top: 2px; animation-duration: 1.6s; }
 @keyframes flicker { 0% { background-position: 0 0; } 50% { background-position: 0 calc(var(--strip-h) * -1); } }
 .trow.fx-out, .trow.fx-thaw { overflow: hidden; }
 .trow.fx-out { animation: fx-out-edge 1.4s steps(4) 1; }
@@ -162,8 +166,14 @@ svg.px { display: block; flex-shrink: 0; }
 .icon-btn:hover::after, .icon-btn:focus-visible::after { content: attr(data-tip); position: absolute; z-index: 10; left: 50%; bottom: calc(100% + 14px); transform: translateX(-50%); padding: 5px 10px; background: var(--solid); border: 4px solid var(--frame); box-shadow: 4px 4px 0 var(--drop); font: 600 var(--l-s)/1 var(--f-label); letter-spacing: 1px; white-space: nowrap; color: var(--text); pointer-events: none; }
 
 /* ---------------------------------------------------------------- footer */
-.footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 16px; flex-shrink: 0; }
-.nav { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; background: var(--panel); border: 4px solid var(--frame); box-shadow: 8px 8px 0 var(--drop); }
+.footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; flex-shrink: 0; }
+.nav { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: var(--panel); border: 4px solid var(--frame); box-shadow: 6px 6px 0 var(--drop); }
+/* the footer is kept small so the screens get the height (2026-10-16) */
+.footer .icon-btn { width: 40px; height: 40px; border-width: 3px; }
+.footer .icon-btn svg.px { width: 30px; height: auto; }
+.footer .actions .btn { min-height: 40px; padding: 2px 12px; gap: 8px; box-shadow: 0 4px 0 var(--night); }
+.footer .actions .btn-primary { box-shadow: 0 4px 0 var(--action-shadow); }
+.footer .actions .btn svg.px { height: 24px; width: auto; }
 .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; }
 
 /* ---------------------------------------------------------------- home */
@@ -916,8 +926,11 @@ table.stat.roster tr:first-child th { padding-left: 3px; padding-right: 3px; }
 .bk-bar { display: flex; align-items: center; gap: 10px; flex-shrink: 0; min-width: 0; }
 .bk-bar .btn { min-height: 40px; }
 .bk-arrow { padding: 4px 14px; }
-.bk-ribbons { flex: 1 1 auto; min-width: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; align-self: flex-end; }
-.bk-ribbon { flex-shrink: 0; min-height: 36px; padding: 6px 12px 4px; border: 4px solid #1A0F08; border-bottom: 0; background: var(--rb); color: #FFF7E6; font: 16px/1 var(--f-label); letter-spacing: 1px; cursor: pointer; text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.45); transform: translateY(6px); transition: transform 0.1s steps(2); }
+.bk-ribbons { flex: 1 1 auto; min-width: 0; display: flex; justify-content: space-between; gap: 24px; align-self: flex-end; }
+.bk-rib { display: flex; gap: 6px; min-width: 0; flex: 0 1 auto; overflow-x: auto; scrollbar-width: none; }
+.bk-rib-r { justify-content: flex-end; }
+.bk-split6 .bk-row > span:nth-child(7) { border-left: 4px double #8F7C53; padding-left: 8px; }
+.bk-ribbon { flex-shrink: 0; min-height: 36px; padding: 6px 12px 4px; border: 4px solid #1A0F08; border-bottom: 0; background: var(--rb); color: #FFF7E6; font: 16px/1 var(--f-label); letter-spacing: 0; cursor: pointer; text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.45); padding-inline: 10px; transform: translateY(6px); transition: transform 0.1s steps(2); }
 .bk-ribbon:hover, .bk-ribbon.on { transform: translateY(0); }
 .bk-ribbon.on { box-shadow: inset 0 4px 0 rgba(255, 255, 255, 0.35); }
 .bk-ribbon.r0 { --rb: #8A2A1C; } .bk-ribbon.r1 { --rb: #2E5E8A; } .bk-ribbon.r2 { --rb: #3E6B33; } .bk-ribbon.r3 { --rb: #8A5A12; } .bk-ribbon.r4 { --rb: #5B3A7A; } .bk-ribbon.r5 { --rb: #2F6B6B; }
@@ -1041,3 +1054,27 @@ table.stat.roster tr:first-child th { padding-left: 3px; padding-right: 3px; }
   .paper-ear { display: none; }
   .paper-name { font-size: 40px; }
 }
+.rank-t .trow > :not(:first-child) { white-space: nowrap; }
+.rank-t sup.rk { margin-left: 2px; font-size: 11px; vertical-align: 5px; color: var(--muted); }
+:root:not(.readable) .rank-t sup.rk { font: 16px/1 var(--f-data); vertical-align: 6px; display: inline-block; transform: scale(0.65); transform-origin: left bottom; margin-right: -6px; }
+/* Gazette: THE RACE (open races only) and WHO'S HOT, WHO'S NOT */
+.rc-block { margin-bottom: 14px; }
+.rc-block .sub-h, .hn-sec .sub-h { display: flex; justify-content: space-between; gap: 8px; margin: 4px 0; }
+.rc-block .sub-h span, .hn-sec .sub-h span { font: 16px/1 var(--f-label); letter-spacing: 1px; color: var(--muted); }
+.rc-story { margin: 0 0 4px; font: 16px/1.25 var(--f-data); font-style: italic; }
+.rc-set { margin-top: 6px; }
+.rc-set .race-mark { margin-left: 4px; }
+.hn-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 24px; align-items: start; }
+.hn-sec { min-width: 0; margin-bottom: 10px; }
+.hn-sec .lead-list li { padding-top: 1px; padding-bottom: 1px; border-bottom-width: 2px; line-height: 24px; }
+.hn-sec .ttable { --row-h: 38px; }
+:root:not(.readable) .hn-sec .trow .link { font-size: 16px; }
+.hn-sec .form-list .nm .small { display: none; }
+@media (max-width: 1300px) { .hn-cols { grid-template-columns: 1fr; } }
+.txn-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; }
+.txn-grid > #w-prospects, .txn-grid > .win:last-child { grid-column: 1 / -1; }
+@media (max-width: 1100px) { .txn-grid { grid-template-columns: 1fr; } }
+.rc-block .ttable { --row-h: 34px; }
+:root:not(.readable) .rc-block .trow .link { font-size: 16px; }
+.rank-t .thead > *, .rank-t .trow > * { padding: 0 2px; }
+:root:not(.readable) .rank-t .trow .link { font-size: 16px; }
